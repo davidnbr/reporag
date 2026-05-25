@@ -6,27 +6,31 @@ from rag_mcp.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_
 
 def _hub_graph() -> nx.DiGraph:
     """
-    Graph where 'hub' is imported by many leaves.
-    Standard PR: leaf utilities win. Reverse PR: hub wins.
+    Graph where hub imports many leaves (architectural controller pattern).
+    Standard PR on import graph: leaves win (many point to them from hub).
+    Reverse PR: hub wins — hub has high out-degree in original = high in-degree
+    in reversed graph, so PageRank mass pools at hub.
 
-    Edges: leaf_* → hub (each leaf imports hub)
+    Edges: hub → leaf_* (hub depends on many leaves), app → hub
     """
     G = nx.DiGraph()
-    hub = "hub"
     for i in range(10):
-        G.add_edge(f"leaf_{i}", hub)  # leaf imports hub
-    G.add_edge("app", "leaf_0")
-    G.add_edge("app", "leaf_1")
+        G.add_edge("hub", f"leaf_{i}")  # hub imports/uses leaves
+    G.add_edge("app", "hub")
     return G
 
 
 def test_reverse_ppr_hub_ranks_above_leaves():
-    """Hub (imported by many) should rank above individual leaves in Reverse PPR."""
+    """Hub (imports many leaves) should rank above individual leaves in Reverse PPR.
+
+    RAG semantic: BM25 hits are leaf nodes; reverse PPR walks reversed graph
+    (leaf→hub edges) to surface the architectural hub they share as parent.
+    """
     G = _hub_graph()
-    # Seed on 'app' — the entry point
-    scores = reverse_personalized_pagerank(G, seed_nodes=["app"], alpha=0.85, top_k=20)
+    # Seed on leaf nodes — these are the BM25/dense retrieval hits
+    scores = reverse_personalized_pagerank(G, seed_nodes=["leaf_0", "leaf_1"], alpha=0.85, top_k=20)
     assert "hub" in scores
-    # Hub should outrank individual leaves (it's the architectural center)
+    # Hub should outrank individual unseeded leaves
     leaf_scores = [scores.get(f"leaf_{i}", 0) for i in range(2, 10)]
     assert scores["hub"] > max(leaf_scores), "Hub must rank above low-connectivity leaves"
 

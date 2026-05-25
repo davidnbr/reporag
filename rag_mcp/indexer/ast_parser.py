@@ -196,6 +196,45 @@ def _walk_extract(
     return chunks
 
 
+def _make_parser(language: str):  # type: ignore[return]
+    """Build a tree-sitter Parser for the given language using per-language packages."""
+    from tree_sitter import Language, Parser
+
+    try:
+        if language == "python":
+            import tree_sitter_python as mod
+            lang_obj = Language(mod.language())
+        elif language == "javascript":
+            import tree_sitter_javascript as mod  # type: ignore[no-redef]
+            lang_obj = Language(mod.language())
+        elif language == "typescript":
+            import tree_sitter_typescript as mod  # type: ignore[no-redef]
+            lang_obj = Language(mod.language_typescript())
+        elif language == "tsx":
+            import tree_sitter_typescript as mod  # type: ignore[no-redef]
+            lang_obj = Language(mod.language_tsx())
+        elif language == "go":
+            import tree_sitter_go as mod  # type: ignore[no-redef]
+            lang_obj = Language(mod.language())
+        elif language == "rust":
+            import tree_sitter_rust as mod  # type: ignore[no-redef]
+            lang_obj = Language(mod.language())
+        elif language == "java":
+            import tree_sitter_java as mod  # type: ignore[no-redef]
+            lang_obj = Language(mod.language())
+        elif language == "c":
+            import tree_sitter_c as mod  # type: ignore[no-redef]
+            lang_obj = Language(mod.language())
+        elif language == "cpp":
+            import tree_sitter_cpp as mod  # type: ignore[no-redef]
+            lang_obj = Language(mod.language())
+        else:
+            return None
+        return Parser(lang_obj)
+    except ImportError:
+        return None
+
+
 def parse_file(path: Path) -> list[Chunk]:
     """
     Parse a source file and return all semantic chunks.
@@ -206,13 +245,11 @@ def parse_file(path: Path) -> list[Chunk]:
     if not language:
         return []
 
-    try:
-        from tree_sitter_languages import get_parser
-    except ImportError as exc:
-        raise RuntimeError("tree-sitter-languages not installed") from exc
+    parser = _make_parser(language)
+    if parser is None:
+        return []
 
     src = path.read_bytes()
-    parser = get_parser(language)
     tree = parser.parse(src)
     target_types = _NODE_TYPES.get(language, {})
 

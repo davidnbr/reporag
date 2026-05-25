@@ -127,11 +127,21 @@ class MemoryStore:
 
 
 def _build_fts_query(query: str, tags: list[str] | None) -> str:
-    """Build FTS5 MATCH expression from query + optional tags."""
-    parts = [query.strip()] if query.strip() else []
+    """
+    Build FTS5 MATCH expression from query + optional tags.
+
+    Splits query into individual tokens (OR match) so "RRF fusion" matches
+    documents containing either "RRF" or "fusion", not the exact phrase.
+    """
+    terms: list[str] = [t for t in query.split() if t.strip()]
     if tags:
-        parts.extend(tags)
-    return " OR ".join(f'"{p}"' for p in parts) if parts else '""'
+        terms.extend(t.strip() for t in tags if t.strip())
+    if not terms:
+        return '""'
+    # Sanitize: remove FTS5 special chars that would cause syntax errors
+    safe = [t.replace('"', "").replace("(", "").replace(")", "") for t in terms]
+    safe = [t for t in safe if t]
+    return " OR ".join(safe) if safe else '""'
 
 
 def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:

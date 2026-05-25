@@ -103,10 +103,25 @@ def _parse_scip_output(scip_path: Path, root: Path) -> list[SCIPEdge]:
     if not scip_path.exists() or scip_path.stat().st_size == 0:
         return []
 
+    # Try multiple import paths — scip package API differs across 0.1.x versions
+    Index = None
     try:
-        from scip import Index  # type: ignore[import]
-    except ImportError:
-        logger.warning("'scip' Python package not installed. Run: pip install scip")
+        from scip import Index  # type: ignore[import]  # noqa: PLC0415
+    except (ImportError, AttributeError):
+        try:
+            import scip_pb2  # type: ignore[import]  # noqa: PLC0415
+            Index = scip_pb2.Index
+        except ImportError:
+            try:
+                from google.protobuf import descriptor_pb2 as _  # noqa: F401, PLC0415
+                import importlib
+                scip_mod = importlib.import_module("scip.scip_pb2")
+                Index = scip_mod.Index
+            except (ImportError, AttributeError):
+                pass
+
+    if Index is None:
+        logger.warning("'scip' Python package not installed or incompatible. Run: pip install 'rag-mcp[scip]'")
         return []
 
     try:
