@@ -11,24 +11,26 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-import pyarrow as pa
 
-
-SCHEMA = pa.schema([
-    pa.field("id", pa.string()),
-    pa.field("file_path", pa.string()),
-    pa.field("language", pa.string()),
-    pa.field("chunk_type", pa.string()),
-    pa.field("name", pa.string()),
-    pa.field("semantic_text", pa.string()),
-    pa.field("raw_content", pa.string()),
-    pa.field("start_line", pa.int32()),
-    pa.field("end_line", pa.int32()),
-    pa.field("parent_name", pa.string()),
-    pa.field("vector", pa.list_(pa.float32())),
-])
 
 TABLE_NAME = "code_chunks"
+
+
+def _schema() -> Any:
+    import pyarrow as pa
+    return pa.schema([
+        pa.field("id", pa.string()),
+        pa.field("file_path", pa.string()),
+        pa.field("language", pa.string()),
+        pa.field("chunk_type", pa.string()),
+        pa.field("name", pa.string()),
+        pa.field("semantic_text", pa.string()),
+        pa.field("raw_content", pa.string()),
+        pa.field("start_line", pa.int32()),
+        pa.field("end_line", pa.int32()),
+        pa.field("parent_name", pa.string()),
+        pa.field("vector", pa.list_(pa.float32())),
+    ])
 
 
 class DenseIndex:
@@ -52,7 +54,7 @@ class DenseIndex:
         try:
             self._table = self._db.open_table(TABLE_NAME)
         except Exception:
-            self._table = self._db.create_table(TABLE_NAME, schema=SCHEMA)
+            self._table = self._db.create_table(TABLE_NAME, schema=_schema())
 
     def upsert(self, records: list[dict[str, Any]]) -> None:
         """Insert or overwrite records. Each record must include 'id' and 'vector'."""
