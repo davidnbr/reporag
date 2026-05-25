@@ -1,8 +1,9 @@
 """
 RAG MCP Server — entry point.
 
-Exposes 5 tools via MCP stdio transport:
-  index_codebase, query_code, get_symbol, remember, recall
+Exposes 9 tools via MCP stdio transport:
+  index_codebase, query_code, get_symbol, remember, recall,
+  summarize_project, get_architecture, project_status, ask_project
 
 Compatible with: agy, Claude Code, Cursor, any MCP client.
 Zero API cost at query time. All computation local.
@@ -177,6 +178,65 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["query"],
             },
         ),
+        types.Tool(
+            name="summarize_project",
+            description=(
+                "Return a structured overview of an indexed project: description from README, "
+                "tech stack, entry points, top components by graph centrality, and public API symbols."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project": {"type": "string", "description": "Absolute path to project root"},
+                },
+                "required": ["project"],
+            },
+        ),
+        types.Tool(
+            name="get_architecture",
+            description=(
+                "Return dependency topology for an indexed project: nodes classified as hub/utility/bridge/leaf, "
+                "edges within the project, layer grouping by top-level path segment, and role summary counts."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project": {"type": "string", "description": "Absolute path to project root"},
+                },
+                "required": ["project"],
+            },
+        ),
+        types.Tool(
+            name="project_status",
+            description=(
+                "Return project health: TODOs/FIXMEs, stub functions, test-to-source ratio, "
+                "and git activity (files changed in 30 days, last commit). "
+                "Health is 'good', 'needs-attention', or 'stale'."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "project": {"type": "string", "description": "Absolute path to project root"},
+                },
+                "required": ["project"],
+            },
+        ),
+        types.Tool(
+            name="ask_project",
+            description=(
+                "Natural language router: routes questions to summarize_project, get_architecture, "
+                "or project_status based on keywords, falling back to query_code for semantic search. "
+                "Use this when you don't know which specific tool to call."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Natural language question about the project"},
+                    "project": {"type": "string", "description": "Absolute path to project root"},
+                },
+                "required": ["query", "project"],
+            },
+        ),
     ]
 
 
@@ -195,6 +255,18 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             result = await mem_tools.run_remember(arguments, _runtime)
         elif name == "recall":
             result = await mem_tools.run_recall(arguments, _runtime)
+        elif name == "summarize_project":
+            from rag_mcp.tools import summarize
+            result = await summarize.run(arguments, _runtime)
+        elif name == "get_architecture":
+            from rag_mcp.tools import architecture
+            result = await architecture.run(arguments, _runtime)
+        elif name == "project_status":
+            from rag_mcp.tools import status
+            result = await status.run(arguments, _runtime)
+        elif name == "ask_project":
+            from rag_mcp.tools import ask
+            result = await ask.run(arguments, _runtime)
         else:
             result = {"error": f"Unknown tool: {name}"}
     except Exception as exc:
