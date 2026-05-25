@@ -1,0 +1,235 @@
+"""AST-aware code chunk extraction via tree-sitter — research §1, §2."""
+from __future__ import annotations
+
+import hashlib
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import tree_sitter
+
+LANGUAGE_EXT: dict[str, str] = {
+    ".py": "python",
+    ".js": "javascript",
+    ".jsx": "javascript",
+    ".ts": "typescript",
+    ".tsx": "tsx",
+    ".go": "go",
+    ".rs": "rust",
+    ".java": "java",
+    ".c": "c",
+    ".cpp": "cpp",
+    ".cc": "cpp",
+    ".h": "c",
+    ".hpp": "cpp",
+}
+
+# Node types to extract per language (type → chunk_type label)
+_NODE_TYPES: dict[str, dict[str, str]] = {
+    "python": {
+        "function_definition": "function",
+        "async_function_definition": "function",
+        "class_definition": "class",
+    },
+    "javascript": {
+        "function_declaration": "function",
+        "function_expression": "function",
+        "arrow_function": "function",
+        "class_declaration": "class",
+        "method_definition": "method",
+    },
+    "typescript": {
+        "function_declaration": "function",
+        "function_expression": "function",
+        "arrow_function": "function",
+        "class_declaration": "class",
+        "method_definition": "method",
+        "interface_declaration": "interface",
+    },
+    "tsx": {
+        "function_declaration": "function",
+        "arrow_function": "function",
+        "class_declaration": "class",
+        "method_definition": "method",
+    },
+    "go": {
+        "function_declaration": "function",
+        "method_declaration": "method",
+        "type_declaration": "class",
+    },
+    "rust": {
+        "function_item": "function",
+        "struct_item": "class",
+        "impl_item": "class",
+        "trait_item": "interface",
+    },
+    "java": {
+        "method_declaration": "method",
+        "class_declaration": "class",
+        "interface_declaration": "interface",
+        "constructor_declaration": "function",
+    },
+    "c": {
+        "function_definition": "function",
+        "struct_specifier": "class",
+    },
+    "cpp": {
+        "function_definition": "function",
+        "class_specifier": "class",
+        "struct_specifier": "class",
+    },
+}
+
+# Name field node types per language
+_NAME_FIELDS: dict[str, list[str]] = {
+    "python": ["name"],
+    "javascript": ["name", "key"],
+    "typescript": ["name", "key"],
+    "tsx": ["name", "key"],
+    "go": ["name"],
+    "rust": ["name"],
+    "java": ["name"],
+    "c": ["declarator"],
+    "cpp": ["declarator"],
+}
+
+
+@dataclass
+class Chunk:
+    """Single semantic code unit extracted from an AST node."""
+
+    id: str
+    file_path: str
+    language: str
+    chunk_type: str
+    name: str
+    raw_content: str
+    start_line: int
+    end_line: int
+    parent_name: str | None = None
+    existing_docstring: str | None = None
+    extra: dict = field(default_factory=dict)
+
+    @classmethod
+    def make_id(cls, file_path: str, name: str, start_line: int) -> str:
+        """Stable content-addressed ID for a chunk."""
+        key = f"{file_path}::{name}::{start_line}"
+        return hashlib.sha256(key.encode()).hexdigest()[:16]
+
+
+def detect_language(path: Path) -> str | None:
+    """Return tree-sitter language name for file, or None if unsupported."""
+    return LANGUAGE_EXT.get(path.suffix.lower())
+
+
+def _get_node_name(node: tree_sitter.Node, language: str, src: bytes) -> str:
+    """Extract the name identifier from a named AST node."""
+    fields = _NAME_FIELDS.get(language, ["name"])
+    for field_name in fields:
+        child = node.child_by_field_name(field_name)
+        if child:
+            # For C/C++ declarators, recurse one level
+            inner = child.child_by_field_name("declarator") or child
+            return src[inner.start_byte:inner.end_byte].decode("utf-8", errors="replace").strip()
+    # Fallback: first named child that looks like an identifier
+    for child in node.children:
+        if child.type in ("identifier", "type_identifier", "field_identifier", "property_identifier"):
+            return src[child.start_byte:child.end_byte].decode("utf-8", errors="replace").strip()
+    return "<anonymous>"
+
+
+def _extract_docstring(node: tree_sitter.Node, language: str, src: bytes) -> str | None:
+    """Extract leading docstring/comment for a node if present."""
+    body = node.child_by_field_name("body")
+    if not body:
+        return None
+    for child in body.children:
+        if child.type in ("expression_statement", "block"):
+            for sub in child.children:
+                if sub.type in ("string", "raw_string_literal"):
+                    text = src[sub.start_byte:sub.end_byte].decode("utf-8", errors="replace")
+                    return text.strip('"\' \n\t').strip()
+        if child.type == "comment":
+            return src[child.start_byte:child.end_byte].decode("utf-8", errors="replace").lstrip("/# ").strip()
+    return None
+
+
+def _walk_extract(
+    node: tree_sitter.Node,
+    src: bytes,
+    file_path: str,
+    language: str,
+    target_types: dict[str, str],
+    parent_name: str | None = None,
+) -> list[Chunk]:
+    chunks: list[Chunk] = []
+    chunk_type = target_types.get(node.type)
+
+    if chunk_type:
+        name = _get_node_name(node, language, src)
+        raw = src[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+        docstring = _extract_docstring(node, language, src)
+        chunk_id = Chunk.make_id(file_path, name, node.start_point[0])
+        chunks.append(
+            Chunk(
+                id=chunk_id,
+                file_path=file_path,
+                language=language,
+                chunk_type=chunk_type,
+                name=name,
+                raw_content=raw,
+                start_line=node.start_point[0] + 1,
+                end_line=node.end_point[0] + 1,
+                parent_name=parent_name,
+                existing_docstring=docstring,
+            )
+        )
+        # For class/interface nodes, recurse with this as parent
+        new_parent = name if chunk_type in ("class", "interface") else parent_name
+    else:
+        new_parent = parent_name
+
+    for child in node.children:
+        chunks.extend(_walk_extract(child, src, file_path, language, target_types, new_parent))
+
+    return chunks
+
+
+def parse_file(path: Path) -> list[Chunk]:
+    """
+    Parse a source file and return all semantic chunks.
+
+    Returns empty list for unsupported languages or parse errors.
+    """
+    language = detect_language(path)
+    if not language:
+        return []
+
+    try:
+        from tree_sitter_languages import get_parser
+    except ImportError as exc:
+        raise RuntimeError("tree-sitter-languages not installed") from exc
+
+    src = path.read_bytes()
+    parser = get_parser(language)
+    tree = parser.parse(src)
+    target_types = _NODE_TYPES.get(language, {})
+
+    chunks = _walk_extract(tree.root_node, src, str(path), language, target_types)
+
+    # Add a module-level chunk for the whole file (imports, exports summary)
+    if chunks:
+        file_chunk = Chunk(
+            id=Chunk.make_id(str(path), "__module__", 0),
+            file_path=str(path),
+            language=language,
+            chunk_type="module",
+            name=path.stem,
+            raw_content=src.decode("utf-8", errors="replace")[:2000],
+            start_line=1,
+            end_line=tree.root_node.end_point[0] + 1,
+        )
+        chunks.insert(0, file_chunk)
+
+    return chunks
