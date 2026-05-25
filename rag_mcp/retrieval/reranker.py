@@ -7,6 +7,7 @@ Lazy-loaded on first use to avoid startup delay.
 """
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 
@@ -16,12 +17,20 @@ class CrossEncoderReranker:
     def __init__(self, model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2") -> None:
         self.model_name = model
         self._model: Any = None
+        self._cache: dict[str, list[dict[str, Any]]] = {}
 
     def _load(self) -> None:
         if self._model is not None:
             return
         from sentence_transformers import CrossEncoder
         self._model = CrossEncoder(self.model_name)
+
+    def _cache_key(self, query: str, chunks: list[dict[str, Any]]) -> str:
+        ids = "|".join(sorted(c.get("id", "") for c in chunks))
+        return hashlib.sha256(f"{query}||{ids}".encode()).hexdigest()[:16]
+
+    def invalidate_cache(self) -> None:
+        self._cache.clear()
 
     def rerank(
         self,
@@ -42,9 +51,14 @@ class CrossEncoderReranker:
         """
         if not chunks:
             return chunks
+        key = self._cache_key(query, chunks)
+        if key in self._cache:
+            return self._cache[key]
         self._load()
         pairs = [(query, c.get(text_key, c.get("raw_content", ""))) for c in chunks]
         scores: list[float] = self._model.predict(pairs).tolist()
         for chunk, score in zip(chunks, scores):
             chunk["rerank_score"] = score
-        return sorted(chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True)
+        result = sorted(chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True)
+        self._cache[key] = result
+        return result

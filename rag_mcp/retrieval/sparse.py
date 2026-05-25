@@ -6,14 +6,37 @@ BM25 params (pinned per research §4 formulation):
   b  = 0.75 (length normalization)
 
 Uses bm25s for fast vectorized BM25. Index persisted as numpy arrays.
+Code-aware tokenization splits snake_case and camelCase so identifiers
+like `rrf_fuse` and `DenseIndex` match their constituent tokens.
 """
 from __future__ import annotations
 
 import json
 import pickle
+import re
 from pathlib import Path
 
 import numpy as np
+
+
+def _code_tokenize(text: str) -> str:
+    """Split code identifiers for BM25 matching.
+
+    rrf_fuse      -> "rrf fuse rrf_fuse"
+    DenseIndex    -> "Dense Index DenseIndex"
+    encode_query  -> "encode query encode_query"
+    """
+    # preserve original alongside splits for exact-match recall
+    tokens = [text]
+    # snake_case split
+    snake_split = re.sub(r'_+', ' ', text)
+    tokens.append(snake_split)
+    # camelCase / PascalCase split
+    camel_split = re.sub(r'([a-z\d])([A-Z])', r'\1 \2', snake_split)
+    tokens.append(camel_split)
+    # letter-digit boundary
+    tokens.append(re.sub(r'([a-zA-Z])(\d)', r'\1 \2', camel_split))
+    return ' '.join(tokens).lower()
 
 
 class BM25Index:
@@ -32,7 +55,8 @@ class BM25Index:
 
         self._doc_ids = doc_ids
         self._corpus = texts
-        corpus_tokens = bm25s.tokenize(texts, stopwords="en")
+        tokenized = [_code_tokenize(t) for t in texts]
+        corpus_tokens = bm25s.tokenize(tokenized, stopwords="en")
         self._retriever = bm25s.BM25(k1=self.k1, b=self.b)
         self._retriever.index(corpus_tokens)
 
@@ -42,7 +66,7 @@ class BM25Index:
             return []
         import bm25s
 
-        query_tokens = bm25s.tokenize([query], stopwords="en")
+        query_tokens = bm25s.tokenize([_code_tokenize(query)], stopwords="en")
         results, _ = self._retriever.retrieve(query_tokens, k=min(k, len(self._doc_ids)))
         # results shape: (n_queries, k) — first query only
         indices = results[0].tolist() if hasattr(results[0], "tolist") else list(results[0])
