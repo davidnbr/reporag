@@ -24,6 +24,9 @@ _ENV_MAP = {
     "RAG_MCP_SPARSE_CANDIDATES": "sparse_candidates",
     "RAG_MCP_SUBGRAPH_HOPS": "subgraph_hops",
     "RAG_MCP_SNIPPET_CHARS": "snippet_chars",
+    "RAG_MCP_RRF_DENSE_WEIGHT": "rrf_dense_weight",
+    "RAG_MCP_RRF_SPARSE_WEIGHT": "rrf_sparse_weight",
+    "RAG_MCP_MIN_GRAPH_EDGES_PPR": "min_graph_edges_for_ppr",
 }
 
 
@@ -44,6 +47,9 @@ class Config(BaseModel):
     subgraph_hops: int = 1        # k-hop expansion for subgraph results
     snippet_chars: int = 600      # max chars of semantic_text returned per result
     use_ollama_docstrings: bool = False  # LLM docstring gen via Ollama (optional)
+    rrf_dense_weight: float = 1.0       # RRF weight for dense retriever
+    rrf_sparse_weight: float = 0.5      # RRF weight for BM25 (down-weighted; dense is stronger)
+    min_graph_edges_for_ppr: int = 50   # minimum graph edges to enable PPR (avoids noise on sparse graphs)
 
 
 def load_config() -> Config:
