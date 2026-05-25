@@ -18,3 +18,8 @@ devenv.local.yaml
 
 # Claude
 .omc/
+
+# Python
+*.pyc
+.pytest_cache
+__pycache__
