@@ -14,6 +14,16 @@ _ENV_MAP = {
     "RAG_MCP_OLLAMA_URL": "ollama_url",
     "RAG_MCP_DATA_DIR": "data_dir",
     "RAG_MCP_RERANKER_MODEL": "reranker_model",
+    "RAG_MCP_RERANKER_K": "reranker_k",
+    "RAG_MCP_BM25_K1": "bm25_k1",
+    "RAG_MCP_BM25_B": "bm25_b",
+    "RAG_MCP_RRF_K": "rrf_k",
+    "RAG_MCP_PPR_ALPHA": "ppr_alpha",
+    "RAG_MCP_PPR_SEED_K": "ppr_seed_k",
+    "RAG_MCP_DENSE_CANDIDATES": "dense_candidates",
+    "RAG_MCP_SPARSE_CANDIDATES": "sparse_candidates",
+    "RAG_MCP_SUBGRAPH_HOPS": "subgraph_hops",
+    "RAG_MCP_SNIPPET_CHARS": "snippet_chars",
 }
 
 
@@ -23,7 +33,7 @@ class Config(BaseModel):
     ollama_url: str = "http://localhost:11434"
     data_dir: str = ".rag-mcp"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    reranker_k: int = 15          # only rerank when candidates <= this
+    reranker_k: int = 50          # rerank when final candidates <= this (raised from 15)
     bm25_k1: float = 1.2          # BM25 term frequency saturation (research §4)
     bm25_b: float = 0.75          # BM25 length normalization (research §4)
     rrf_k: int = 60               # RRF smoothing constant (research §4, standardized)
@@ -32,6 +42,7 @@ class Config(BaseModel):
     dense_candidates: int = 50    # dense retrieval pool before RRF
     sparse_candidates: int = 50   # BM25 retrieval pool before RRF
     subgraph_hops: int = 1        # k-hop expansion for subgraph results
+    snippet_chars: int = 600      # max chars of semantic_text returned per result
     use_ollama_docstrings: bool = False  # LLM docstring gen via Ollama (optional)
 
 
@@ -40,9 +51,19 @@ def load_config() -> Config:
     if CONFIG_PATH.exists():
         with open(CONFIG_PATH) as f:
             data = json.load(f)
+    fields = Config.model_fields
     for env_key, field in _ENV_MAP.items():
         if val := os.environ.get(env_key):
-            data[field] = val
+            annotation = fields[field].annotation if field in fields else str
+            try:
+                if annotation is int:
+                    data[field] = int(val)
+                elif annotation is float:
+                    data[field] = float(val)
+                else:
+                    data[field] = val
+            except (ValueError, TypeError):
+                data[field] = val
     return Config(**data)
 
 

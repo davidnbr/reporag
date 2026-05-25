@@ -10,6 +10,7 @@ logger = logging.getLogger(__name__)
 _EXCLUDE_DEFAULTS = {
     "node_modules", ".git", "__pycache__", ".venv", "venv", "env",
     "dist", "build", ".mypy_cache", ".ruff_cache", "target", ".rag-mcp",
+    ".devenv", ".direnv", "vendor", "pkg", ".cache",
 }
 
 

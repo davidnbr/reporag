@@ -41,6 +41,7 @@ async def run(
     k: int = int(arguments.get("k", 10))
     do_rerank: bool = arguments.get("rerank", True)
     lang_filter: list[str] | None = arguments.get("languages")
+    project_filter: str | None = arguments.get("project")  # filter by file path prefix
 
     cfg = runtime.config
 
@@ -72,9 +73,11 @@ async def run(
     # ── 6. Fetch full chunk records ─────────────────────────────────────────
     candidates = runtime.dense.get_chunks(candidate_ids)
 
-    # Apply language filter
+    # Apply filters
     if lang_filter:
         candidates = [c for c in candidates if c.get("language") in lang_filter]
+    if project_filter:
+        candidates = [c for c in candidates if c.get("file_path", "").startswith(project_filter)]
 
     # ── 7. Cross-encoder rerank ─────────────────────────────────────────────
     if do_rerank and candidates and len(candidates) <= cfg.reranker_k:
@@ -86,7 +89,7 @@ async def run(
 
     return {
         "query": query,
-        "results": _format_results(final, merged),
+        "results": _format_results(final, merged, cfg.snippet_chars),
         "total_candidates": len(candidates),
         "pipeline": {
             "dense_hits": len(dense_ids),
@@ -127,6 +130,7 @@ def _expand_subgraph(
 def _format_results(
     chunks: list[dict[str, Any]],
     scores: dict[str, float],
+    snippet_chars: int = 600,
 ) -> list[dict[str, Any]]:
     out = []
     for chunk in chunks:
@@ -139,7 +143,7 @@ def _format_results(
             "end_line": chunk.get("end_line", 0),
             "score": round(scores.get(chunk.get("id", ""), 0.0), 4),
             "rerank_score": round(chunk.get("rerank_score", 0.0), 4),
-            "snippet": chunk.get("semantic_text", "")[:300],
+            "snippet": chunk.get("semantic_text", "")[:snippet_chars],
             "neighbors": chunk.get("neighbors", []),
         })
     return out
