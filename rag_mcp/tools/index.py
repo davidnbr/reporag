@@ -61,6 +61,9 @@ async def run(
     # Chunk + embed
     import time
     t0 = time.monotonic()
+    if not incremental:
+        deleted = runtime.dense.delete_by_project(str(root))
+        logger.info("Full re-index: removed %d stale chunks for %s", deleted, root)
     chunk_stats = runtime.chunker.index_files(files, incremental=incremental)
 
     # Build dependency graph
