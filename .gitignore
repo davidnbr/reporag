@@ -16,8 +16,9 @@ devenv.local.yaml
 *.key
 *.pem*
 
-# Claude
-.omc/
+# AI
+.omc
+.antigravitycli
 
 # Python
 *.pyc
