@@ -52,14 +52,26 @@ async def run(
     # ── 2. Sparse retrieval (BM25) ──────────────────────────────────────────
     sparse_ids = runtime.bm25.search(query, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []
 
-    # ── 3. RRF fusion ───────────────────────────────────────────────────────
+    # ── 3. RRF fusion (weighted: dense=1.0, sparse=0.5) ─────────────────────
     from rag_mcp.retrieval.rrf import rrf_fuse, top_k as rrf_top_k
-    fused = rrf_fuse([dense_ids, sparse_ids], k=cfg.rrf_k)
+    fused = rrf_fuse(
+        [dense_ids, sparse_ids],
+        k=cfg.rrf_k,
+        weights=[cfg.rrf_dense_weight, cfg.rrf_sparse_weight],
+    )
 
-    # ── 4. Reverse Personalized PageRank ────────────────────────────────────
+    # ── 4. Reverse Personalized PageRank (gated on graph quality) ───────────
     seed_ids = [doc_id for doc_id, _ in rrf_top_k(fused, cfg.ppr_seed_k)]
     ppr_scores: dict[str, float] = {}
-    if runtime.graph is not None and runtime.graph.number_of_nodes() > 0:
+    graph_edge_count = runtime.graph.number_of_edges() if runtime.graph is not None else 0
+    ppr_enabled = (
+        runtime.graph is not None
+        and runtime.graph.number_of_nodes() > 0
+        and graph_edge_count >= cfg.min_graph_edges_for_ppr
+    )
+    # Use reduced PPR weight when graph is heuristic-only (no compiler-grade SCIP edges)
+    ppr_weight = 0.4 if graph_edge_count >= cfg.min_graph_edges_for_ppr * 5 else 0.2
+    if ppr_enabled:
         from rag_mcp.retrieval.pagerank import reverse_personalized_pagerank
         ppr_scores = reverse_personalized_pagerank(
             runtime.graph, seed_ids, alpha=cfg.ppr_alpha, top_k=k * 3
@@ -67,7 +79,7 @@ async def run(
 
     # ── 5. Score merge ──────────────────────────────────────────────────────
     from rag_mcp.retrieval.pagerank import merge_rrf_ppr
-    merged = merge_rrf_ppr(fused, ppr_scores)
+    merged = merge_rrf_ppr(fused, ppr_scores, ppr_weight=ppr_weight)
     candidate_ids = [doc_id for doc_id, _ in list(merged.items())[: k * 3]]
 
     # ── 6. Fetch full chunk records ─────────────────────────────────────────

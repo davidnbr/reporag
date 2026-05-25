@@ -73,6 +73,10 @@ async def run(
     # Reload NetworkX graph into runtime
     runtime.reload_graph()
 
+    # Invalidate reranker cache — indexed content changed
+    if runtime.reranker is not None:
+        runtime.reranker.invalidate_cache()
+
     elapsed = time.monotonic() - t0
     coverage = runtime.graph_db.coverage_report()
 
