@@ -16,7 +16,7 @@ import numpy as np
 TABLE_NAME = "code_chunks"
 
 
-def _schema() -> Any:
+def _schema(dim: int) -> Any:
     import pyarrow as pa
     return pa.schema([
         pa.field("id", pa.string()),
@@ -29,7 +29,7 @@ def _schema() -> Any:
         pa.field("start_line", pa.int32()),
         pa.field("end_line", pa.int32()),
         pa.field("parent_name", pa.string()),
-        pa.field("vector", pa.list_(pa.float32())),
+        pa.field("vector", pa.list_(pa.float32(), dim)),
     ])
 
 
@@ -54,21 +54,24 @@ class DenseIndex:
         try:
             self._table = self._db.open_table(TABLE_NAME)
         except Exception:
-            self._table = self._db.create_table(TABLE_NAME, schema=_schema())
+            self._table = self._db.create_table(TABLE_NAME, schema=_schema(self._dim))
 
     def upsert(self, records: list[dict[str, Any]]) -> None:
         """Insert or overwrite records. Each record must include 'id' and 'vector'."""
         if not records:
             return
         self._open_or_create_table()
-        # LanceDB merge_insert for upsert by id
-        import pandas as pd
-        df = pd.DataFrame(records)
-        # Ensure vector is list[float], not ndarray
-        df["vector"] = df["vector"].apply(
-            lambda v: v.tolist() if isinstance(v, np.ndarray) else list(v)
-        )
-        self._table.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(df)
+        import pyarrow as pa
+        # Normalize vectors to list[float] before building arrow table
+        for r in records:
+            v = r.get("vector")
+            if isinstance(v, np.ndarray):
+                r["vector"] = v.tolist()
+            elif not isinstance(v, list):
+                r["vector"] = list(v)
+        schema = _schema(self._dim)
+        table = pa.Table.from_pylist(records, schema=schema)
+        self._table.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(table)
 
     def delete_by_file(self, file_path: str) -> None:
         """Remove all chunks belonging to a file (for incremental re-index)."""
