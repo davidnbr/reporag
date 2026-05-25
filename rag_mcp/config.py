@@ -31,7 +31,7 @@ class Config(BaseModel):
     embed_model: str = "nomic-ai/nomic-embed-text-v1"
     embed_backend: str = "sentence-transformers"  # "sentence-transformers" | "ollama"
     ollama_url: str = "http://localhost:11434"
-    data_dir: str = ".rag-mcp"
+    data_dir: str = "~/.local/share/rag-mcp"
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     reranker_k: int = 50          # rerank when final candidates <= this (raised from 15)
     bm25_k1: float = 1.2          # BM25 term frequency saturation (research §4)
