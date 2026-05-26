@@ -71,7 +71,7 @@ MCP clients then launch the server automatically via `uvx`. No manual install st
       "command": "uvx",
       "args": [
         "--from",
-        "rag-mcp[ml,treesitter] @ git+https://github.com/davidnbr/codebrain.git",
+        "rag-mcp[ml] @ git+https://github.com/davidnbr/codebrain.git",
         "rag-mcp"
       ],
       "env": {
@@ -91,7 +91,7 @@ Same format as above.
 ```json
 {
   "command": "uvx",
-  "args": ["--from", "rag-mcp[ml,treesitter] @ git+https://github.com/davidnbr/codebrain.git", "rag-mcp"],
+  "args": ["--from", "rag-mcp[ml] @ git+https://github.com/davidnbr/codebrain.git", "rag-mcp"],
   "env": { "RAG_MCP_DATA_DIR": "~/.local/share/rag-mcp" }
 }
 ```
@@ -184,7 +184,7 @@ git clone https://github.com/davidnbr/codebrain
 cd codebrain
 devenv shell   # Nix-based reproducible env (requires devenv)
 # or:
-uv sync --extra dev --extra treesitter
+uv sync --extra dev
 pytest tests/ -v
 ```
 
