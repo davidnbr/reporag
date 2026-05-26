@@ -22,6 +22,33 @@ codebrain MCP server
        └── SQLite FTS5  → persistent memory store
 ```
 
+## Benchmarks
+
+Synthetic golden set: 40 named functions/classes from the live index.
+Query template: `"implementation of {name}"` / `"how does {name} work"`.
+Metric: fraction of queries where the exact chunk appears in top-k (Recall@k), plus MRR@k.
+
+| Stage      | Recall@5 | Recall@10 | MRR@10 | ms/query |
+|------------|----------|-----------|--------|----------|
+| dense      | 0.875    | 0.900     | 0.791  | 6        |
+| bm25       | 0.875    | 0.875     | 0.765  | <1       |
+| rrf        | 0.875    | 0.925     | 0.778  | 6        |
+| rrf + ppr  | 0.875    | 0.925     | 0.768  | 8        |
+| **full**   | **0.900**| **0.900** |**0.814**| 430     |
+
+`full` = RRF fusion → Reverse PPR hub re-ranking → cross-encoder rerank.
+Reranker cost (~430 ms) trades latency for top-1 precision; disable with `rerank=false` in `query_code`.
+
+Run your own ablation:
+
+```bash
+devenv shell -- python scripts/benchmark.py --samples 100 --k 5 10
+# filter to a single project:
+devenv shell -- python scripts/benchmark.py --project /path/to/project --stages dense rrf full
+# functions only, quiet output:
+devenv shell -- python scripts/benchmark.py --filter-chunk-types function --quiet
+```
+
 ## Install (any machine)
 
 **Prerequisites:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) — single binary, no Python required upfront.
