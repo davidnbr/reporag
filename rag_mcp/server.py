@@ -67,7 +67,12 @@ class Runtime:
         self.reranker = CrossEncoderReranker(self.config.reranker_model)
         self.graph_db = GraphDB(data / "dependency_graph.db")
         self.memory = MemoryStore(data / "memory.db")
-        self.chunker = ChunkIndexer(data, self.embedder, self.dense, self.bm25)
+        self.chunker = ChunkIndexer(
+            data, self.embedder, self.dense, self.bm25,
+            chunk_strategy=self.config.chunk_strategy,
+            chunk_window_lines=self.config.chunk_window_lines,
+            chunk_overlap_lines=self.config.chunk_overlap_lines,
+        )
 
         # Try loading persisted BM25 index
         bm25_path = data / "bm25"

@@ -39,7 +39,7 @@ async def run(
         return {"error": "query is required"}
 
     k: int = int(arguments.get("k", 10))
-    do_rerank: bool = arguments.get("rerank", True)
+    do_rerank: bool = arguments.get("rerank", cfg.rerank_by_default)
     lang_filter: list[str] | None = arguments.get("languages")
     project_filter: str | None = arguments.get("project")  # filter by file path prefix
 

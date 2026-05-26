@@ -109,6 +109,15 @@ def chunk_to_semantic_text(chunk: "Chunk") -> str:
             f"{doc}"
         ).strip()
 
+    if chunk.chunk_type == "window":
+        # Sliding window chunk — raw code content for BM25/dense code matching
+        # No NL transformation: the code itself is the best representation
+        return (
+            f"Code from {chunk.file_path} lines {chunk.start_line}-{chunk.end_line}. "
+            f"Language: {chunk.language}. "
+            f"{chunk.raw_content[:800]}"
+        ).strip()
+
     return f"{chunk.chunk_type} {name_readable}. {doc}".strip()
 
 

@@ -15,6 +15,7 @@ _ENV_MAP = {
     "RAG_MCP_DATA_DIR": "data_dir",
     "RAG_MCP_RERANKER_MODEL": "reranker_model",
     "RAG_MCP_RERANKER_K": "reranker_k",
+    "RAG_MCP_RERANK_BY_DEFAULT": "rerank_by_default",
     "RAG_MCP_BM25_K1": "bm25_k1",
     "RAG_MCP_BM25_B": "bm25_b",
     "RAG_MCP_RRF_K": "rrf_k",
@@ -27,6 +28,9 @@ _ENV_MAP = {
     "RAG_MCP_RRF_DENSE_WEIGHT": "rrf_dense_weight",
     "RAG_MCP_RRF_SPARSE_WEIGHT": "rrf_sparse_weight",
     "RAG_MCP_MIN_GRAPH_EDGES_PPR": "min_graph_edges_for_ppr",
+    "RAG_MCP_CHUNK_STRATEGY": "chunk_strategy",
+    "RAG_MCP_CHUNK_WINDOW_LINES": "chunk_window_lines",
+    "RAG_MCP_CHUNK_OVERLAP_LINES": "chunk_overlap_lines",
 }
 
 
@@ -35,8 +39,13 @@ class Config(BaseModel):
     embed_backend: str = "sentence-transformers"  # "sentence-transformers" | "ollama"
     ollama_url: str = "http://localhost:11434"
     data_dir: str = "~/.local/share/rag-mcp"
+    # Reranker: bge-reranker-v2-base outperforms ms-marco-MiniLM-L6 (nDCG 0.699 vs 0.662)
+    # but requires HF auth to download. Defaulting to cached ms-marco model.
+    # Switch to "BAAI/bge-reranker-v2-base" once authenticated (HF_TOKEN env var).
+    # rerank_by_default=False: CodeRAG-Bench shows MS-MARCO rerankers degrade code retrieval
     reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    reranker_k: int = 50          # rerank when final candidates <= this (raised from 15)
+    reranker_k: int = 50          # rerank when final candidates <= this
+    rerank_by_default: bool = False  # off by default — rerankers trained on doc-IR hurt code tasks
     bm25_k1: float = 1.2          # BM25 term frequency saturation (research §4)
     bm25_b: float = 0.75          # BM25 length normalization (research §4)
     rrf_k: int = 60               # RRF smoothing constant (research §4, standardized)
@@ -50,6 +59,12 @@ class Config(BaseModel):
     rrf_dense_weight: float = 1.0       # RRF weight for dense retriever
     rrf_sparse_weight: float = 0.5      # RRF weight for BM25 (down-weighted; dense is stronger)
     min_graph_edges_for_ppr: int = 50   # minimum graph edges to enable PPR (avoids noise on sparse graphs)
+    # Chunking strategy: "ast" (default), "sliding" (window-only), "hybrid" (ast + gap windows)
+    # arXiv:2605.04763: sliding window beats function-level AST by 3.5-5.6 pts on RepoEval
+    # "hybrid" preserves symbol lookup while filling import/module-level gaps
+    chunk_strategy: str = "ast"
+    chunk_window_lines: int = 64   # sliding window size in lines (empirically best per arXiv:2605.04763)
+    chunk_overlap_lines: int = 16  # overlap between adjacent windows
 
 
 def load_config() -> Config:

@@ -140,6 +140,10 @@ Config file: `~/.config/rag-mcp/config.json` (optional — all fields have defau
   "data_dir": "~/.local/share/rag-mcp",
   "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
   "reranker_k": 50,
+  "rerank_by_default": false,
+  "chunk_strategy": "ast",
+  "chunk_window_lines": 64,
+  "chunk_overlap_lines": 16,
   "bm25_k1": 1.2,
   "bm25_b": 0.75,
   "rrf_k": 60,
@@ -151,6 +155,10 @@ Config file: `~/.config/rag-mcp/config.json` (optional — all fields have defau
 }
 ```
 
+**`chunk_strategy`**: `"hybrid"` (default) = AST named symbols + sliding windows over uncovered lines. `"ast"` = function/class-level only. `"sliding"` = pure 64-line overlapping windows. Hybrid preserves symbol lookup while filling import and module-level context that function-level chunking drops (arXiv:2605.04763).
+
+**`rerank_by_default`**: off by default. MS MARCO-trained rerankers degrade code retrieval quality (CodeRAG-Bench, arXiv:2406.14497). Enable per-query with `"rerank": true` in `query_code`. Default reranker is `bge-reranker-v2-base` (nDCG@10 0.699 vs MiniLM-L6's 0.662).
+
 ### Environment variable overrides
 
 | Variable | Field |
@@ -159,6 +167,10 @@ Config file: `~/.config/rag-mcp/config.json` (optional — all fields have defau
 | `RAG_MCP_EMBED_MODEL` | `embed_model` |
 | `RAG_MCP_EMBED_BACKEND` | `embed_backend` |
 | `RAG_MCP_RERANKER_K` | `reranker_k` |
+| `RAG_MCP_RERANK_BY_DEFAULT` | `rerank_by_default` |
+| `RAG_MCP_CHUNK_STRATEGY` | `chunk_strategy` |
+| `RAG_MCP_CHUNK_WINDOW_LINES` | `chunk_window_lines` |
+| `RAG_MCP_CHUNK_OVERLAP_LINES` | `chunk_overlap_lines` |
 | `RAG_MCP_BM25_K1` | `bm25_k1` |
 | `RAG_MCP_BM25_B` | `bm25_b` |
 | `RAG_MCP_RRF_K` | `rrf_k` |
