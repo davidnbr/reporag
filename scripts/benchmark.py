@@ -56,13 +56,17 @@ def _build_runtime(data_dir: str | None) -> Any:
     return rt
 
 
-def _get_named_chunks(runtime: Any, project: str | None, max_samples: int, seed: int) -> list[dict]:
+def _get_named_chunks(
+    runtime: Any, project: str | None, max_samples: int, seed: int,
+    chunk_types: set[str] | None = None,
+) -> list[dict]:
     runtime.dense._open_or_create_table()
     rows = runtime.dense._table.search().limit(max_samples * 20).to_list()
+    types = chunk_types if chunk_types is not None else _CHUNK_TYPES
     named = [
         r for r in rows
         if r.get("name")
-        and r.get("chunk_type") in _CHUNK_TYPES
+        and r.get("chunk_type") in types
         and (not project or r.get("file_path", "").startswith(project))
     ]
     if len(named) > max_samples:
@@ -166,23 +170,31 @@ def main() -> None:
     parser.add_argument("--data-dir", type=str, help="Override RAG_MCP_DATA_DIR")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--stages", nargs="+", choices=list(_STAGES), default=list(_STAGES))
+    parser.add_argument("--quiet", action="store_true", help="Suppress progress output")
+    parser.add_argument("--filter-chunk-types", nargs="+", metavar="TYPE",
+                        default=list(_CHUNK_TYPES),
+                        help="Chunk types to include in golden set (default: function class method)")
     args = parser.parse_args()
 
-    print("Loading runtime...", flush=True)
+    if not args.quiet:
+        print("Loading runtime...", flush=True)
     t0 = time.monotonic()
     rt = _build_runtime(args.data_dir)
-    print(f"Runtime loaded in {time.monotonic() - t0:.1f}s")
+    if not args.quiet:
+        print(f"Runtime loaded in {time.monotonic() - t0:.1f}s")
 
-    chunks = _get_named_chunks(rt, args.project, args.samples, args.seed)
+    chunk_types = set(args.filter_chunk_types)
+    chunks = _get_named_chunks(rt, args.project, args.samples, args.seed, chunk_types)
     if not chunks:
         print("No named chunks found. Run: index_codebase path=<project>")
         sys.exit(1)
 
-    print(f"\nGolden set : {len(chunks)} named chunks (functions/classes/methods)")
-    if args.project:
-        print(f"Project    : {args.project}")
-    print(f"Stages     : {', '.join(args.stages)}")
-    print(f"k values   : {args.k}\n")
+    if not args.quiet:
+        print(f"\nGolden set : {len(chunks)} named chunks ({', '.join(sorted(chunk_types))})")
+        if args.project:
+            print(f"Project    : {args.project}")
+        print(f"Stages     : {', '.join(args.stages)}")
+        print(f"k values   : {args.k}\n")
 
     # Build (gold_id, query) pairs
     golden: list[tuple[str, str, str]] = []
@@ -198,9 +210,10 @@ def main() -> None:
     }
     latencies: dict[str, list[float]] = {stage: [] for stage in args.stages}
 
-    print(f"Running {len(golden)} queries × {len(args.stages)} stages...", flush=True)
+    if not args.quiet:
+        print(f"Running {len(golden)} queries × {len(args.stages)} stages...", flush=True)
     for idx, (gold_id, query, _name) in enumerate(golden):
-        if idx % 10 == 0:
+        if not args.quiet and idx % 10 == 0:
             print(f"  {idx:4d}/{len(golden)}", end="\r", flush=True)
 
         q_vec = rt.embedder.encode_query(query)
@@ -213,7 +226,8 @@ def main() -> None:
             for k in args.k:
                 results[stage][k].append((gold_id, retrieved[:k]))
 
-    print(f"  {len(golden):4d}/{len(golden)} done    ")
+    if not args.quiet:
+        print(f"  {len(golden):4d}/{len(golden)} done    ")
 
     # Print results table
     k_headers = " │ ".join(f"Recall@{k:<2d}  MRR@{k:<2d}" for k in args.k)

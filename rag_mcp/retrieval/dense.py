@@ -94,7 +94,7 @@ class DenseIndex:
             self._table.search(query_vec.tolist())
             .metric("cosine")
             .limit(k)
-            .select(["id"])
+            .select(["id", "_distance"])
             .to_list()
         )
         return [r["id"] for r in results]

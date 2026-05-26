@@ -135,7 +135,7 @@ def test_full_pipeline_recall_at_10(runtime: Any, golden: list) -> None:
     recall = _recall(pairs)
     mrr = _mrr(pairs)
     print(f"\n  Full pipeline — Recall@10={recall:.3f}  MRR@10={mrr:.3f}")
-    assert recall >= 0.5, f"Recall@10={recall:.3f} < 0.5 threshold"
+    assert recall >= 0.80, f"Recall@10={recall:.3f} < 0.80 threshold"
 
 
 def test_full_pipeline_recall_at_5(runtime: Any, golden: list) -> None:
@@ -147,7 +147,7 @@ def test_full_pipeline_recall_at_5(runtime: Any, golden: list) -> None:
         pairs.append((gold_id, retrieved))
 
     recall = _recall(pairs)
-    assert recall >= 0.35, f"Recall@5={recall:.3f} < 0.35 threshold"
+    assert recall >= 0.75, f"Recall@5={recall:.3f} < 0.75 threshold"
 
 
 def test_rrf_not_worse_than_dense(runtime: Any, golden: list) -> None:
@@ -191,4 +191,4 @@ def test_mrr_at_10(runtime: Any, golden: list) -> None:
         pairs.append((gold_id, retrieved))
 
     mrr = _mrr(pairs)
-    assert mrr >= 0.30, f"MRR@10={mrr:.3f} < 0.30 threshold"
+    assert mrr >= 0.65, f"MRR@10={mrr:.3f} < 0.65 threshold"
