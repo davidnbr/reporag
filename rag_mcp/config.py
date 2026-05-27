@@ -39,11 +39,9 @@ class Config(BaseModel):
     embed_backend: str = "sentence-transformers"  # "sentence-transformers" | "ollama"
     ollama_url: str = "http://localhost:11434"
     data_dir: str = "~/.local/share/rag-mcp"
-    # Reranker: bge-reranker-v2-base outperforms ms-marco-MiniLM-L6 (nDCG 0.699 vs 0.662)
-    # but requires HF auth to download. Defaulting to cached ms-marco model.
-    # Switch to "BAAI/bge-reranker-v2-base" once authenticated (HF_TOKEN env var).
+    # Reranker: bge-reranker-base outperforms ms-marco-MiniLM-L6 (nDCG@10 0.699 vs 0.662)
     # rerank_by_default=False: CodeRAG-Bench shows MS-MARCO rerankers degrade code retrieval
-    reranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
+    reranker_model: str = "BAAI/bge-reranker-base"
     reranker_k: int = 50          # rerank when final candidates <= this
     rerank_by_default: bool = False  # off by default — rerankers trained on doc-IR hurt code tasks
     bm25_k1: float = 1.2          # BM25 term frequency saturation (research §4)
