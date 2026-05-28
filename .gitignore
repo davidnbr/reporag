@@ -24,4 +24,4 @@ devenv.local.yaml
 *.pyc
 .pytest_cache
 __pycache__
-.rag-mcp/
+.codebrain/
