@@ -1,8 +1,8 @@
 """
 RAG MCP Server — entry point.
 
-Exposes 9 tools via MCP stdio transport:
-  index_codebase, query_code, get_symbol, remember, recall,
+Exposes 10 tools via MCP stdio transport:
+  index_codebase, index_status, query_code, get_symbol, remember, recall,
   summarize_project, get_architecture, project_status, ask_project
 
 Compatible with: agy, Claude Code, Cursor, any MCP client.
@@ -13,6 +13,8 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import threading
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -28,6 +30,92 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class IndexTask:
+    task_id: str
+    project: str
+    started_at: float
+    total_files: int
+    incremental: bool = True
+    indexed_files: int = 0
+    indexed_chunks: int = 0
+    skipped_files: int = 0
+    graph_edges_scip: int = 0
+    graph_edges_heuristic: int = 0
+    status: str = "running"   # running | done | error
+    error: str | None = None
+    finished_at: float | None = None
+
+
+class _ChangeHandler:
+    """Watchdog event handler: debounces file changes and triggers incremental reindex."""
+
+    def __init__(self, runtime: "Runtime", loop: asyncio.AbstractEventLoop) -> None:
+        self._runtime = runtime
+        self._loop = loop
+        self._pending: set[str] = set()
+        self._lock = threading.Lock()
+        self._timer: threading.Timer | None = None
+
+    # watchdog calls these from its observer thread
+    def dispatch(self, event: Any) -> None:  # noqa: ANN401
+        if event.is_directory:
+            return
+        src = getattr(event, "src_path", None)
+        if src:
+            self._enqueue(src)
+        # FileMovedEvent has dest_path too
+        dest = getattr(event, "dest_path", None)
+        if dest:
+            self._enqueue(dest)
+
+    def _enqueue(self, path: str) -> None:
+        from codebrain.indexer.ast_parser import detect_language
+        if not detect_language(Path(path)):
+            return
+        with self._lock:
+            self._pending.add(path)
+            if self._timer:
+                self._timer.cancel()
+            self._timer = threading.Timer(
+                self._runtime.config.watch_debounce_s, self._flush
+            )
+            self._timer.daemon = True
+            self._timer.start()
+
+    def _flush(self) -> None:
+        with self._lock:
+            paths = list(self._pending)
+            self._pending.clear()
+        if not paths:
+            return
+        # Find the project root for changed files
+        projects: set[str] = set()
+        for p in paths:
+            project = self._find_project(p)
+            if project:
+                projects.add(project)
+        for project in projects:
+            logger.info("File watcher: triggering incremental reindex for %s", project)
+            asyncio.run_coroutine_threadsafe(
+                self._reindex(project), self._loop
+            )
+
+    def _find_project(self, file_path: str) -> str | None:
+        fp = Path(file_path)
+        for proj in self._runtime.watched_projects:
+            try:
+                fp.relative_to(proj)
+                return proj
+            except ValueError:
+                continue
+        return None
+
+    async def _reindex(self, project: str) -> None:
+        from codebrain.tools.index import run as index_run
+        await index_run({"path": project, "incremental": True}, self._runtime)
+
+
+@dataclass
 class Runtime:
     """Lazily-initialized shared state for the MCP server."""
 
@@ -40,6 +128,13 @@ class Runtime:
     reranker: Any = None
     memory: Any = None
     chunker: Any = None
+    # Background indexing
+    index_tasks: dict[str, IndexTask] = field(default_factory=dict)
+    watched_projects: set[str] = field(default_factory=set)
+    _watcher: Any = None       # watchdog Observer
+    _watcher_handlers: dict[str, Any] = field(default_factory=dict)  # project → handler
+    _loop: Any = None
+    index_sem: Any = None      # asyncio.Semaphore — prevents concurrent index runs
 
     def _data_dir(self) -> Path:
         return Path(self.config.data_dir).expanduser()
@@ -74,7 +169,6 @@ class Runtime:
             chunk_overlap_lines=self.config.chunk_overlap_lines,
         )
 
-        # Try loading persisted BM25 index
         bm25_path = data / "bm25"
         if (bm25_path / "retriever.pkl").exists():
             try:
@@ -83,15 +177,48 @@ class Runtime:
             except Exception as exc:
                 logger.warning("Could not load BM25 index: %s", exc)
 
-        # Load graph
         self.reload_graph()
-        logger.info("RAG MCP runtime initialized (data_dir=%s)", data)
+        logger.info("codebrain runtime initialized (data_dir=%s)", data)
 
     def reload_graph(self) -> None:
         """Reload NetworkX graph from SQLite after re-indexing."""
         if self.graph_db is not None:
             self.graph = self.graph_db.load_networkx_graph()
-            logger.info("Graph loaded: %d nodes, %d edges", self.graph.number_of_nodes(), self.graph.number_of_edges())
+            logger.info(
+                "Graph loaded: %d nodes, %d edges",
+                self.graph.number_of_nodes(), self.graph.number_of_edges(),
+            )
+
+    def _start_watcher(self, project: str) -> None:
+        """Attach a watchdog observer to project dir. No-op if watchdog not installed."""
+        if project in self._watcher_handlers:
+            return  # already watching
+        try:
+            from watchdog.observers import Observer
+        except ImportError:
+            logger.debug("watchdog not installed — install codebrain[watch] to enable file watching")
+            return
+
+        if self._watcher is None:
+            self._watcher = Observer()
+            self._watcher.daemon = True
+            self._watcher.start()
+
+        handler = _ChangeHandler(self, self._loop)
+        self._watcher.schedule(handler, project, recursive=True)
+        self._watcher_handlers[project] = handler
+        logger.info("File watcher active for %s", project)
+
+    async def _auto_index(self) -> None:
+        """Kick off background indexing for all auto_index_paths from config."""
+        from codebrain.tools.index import run as index_run
+        for path_str in self.config.auto_index_paths:
+            path = Path(path_str).expanduser().resolve()
+            if path.exists() and path.is_dir():
+                logger.info("Auto-indexing %s", path)
+                await index_run({"path": str(path), "incremental": True}, self)
+            else:
+                logger.warning("auto_index_paths: %s does not exist, skipping", path_str)
 
 
 _runtime = Runtime()
@@ -105,19 +232,34 @@ async def list_tools() -> list[types.Tool]:
         types.Tool(
             name="index_codebase",
             description=(
-                "Parse, embed, and graph-index a codebase. Uses tree-sitter for AST chunking, "
-                "SCIP for compiler-grade dependency graph (with heuristic fallback), "
-                "and local embeddings. Run once, then incrementally on changes."
+                "Parse, embed, and graph-index a codebase. Returns immediately with a task_id — "
+                "indexing runs in background with progressive availability (first batch queryable "
+                "within seconds). Uses tree-sitter AST chunking, SCIP dependency graph, and local "
+                "embeddings. Call index_status to track progress."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Absolute path to project root"},
-                    "incremental": {"type": "boolean", "default": True, "description": "Skip unchanged files"},
+                    "incremental": {"type": "boolean", "default": True, "description": "Skip unchanged files (mtime + hash check)"},
                     "languages": {"type": "array", "items": {"type": "string"}, "description": "Restrict to these languages"},
                     "exclude_patterns": {"type": "array", "items": {"type": "string"}, "description": "Directory names to exclude"},
                 },
                 "required": ["path"],
+            },
+        ),
+        types.Tool(
+            name="index_status",
+            description=(
+                "Query the status of a background index task. Returns progress percentage, "
+                "files indexed, chunks indexed, elapsed time, and ETA. "
+                "Omit task_id to list all tasks."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task_id": {"type": "string", "description": "Task ID returned by index_codebase. Omit to list all tasks."},
+                },
             },
         ),
         types.Tool(
@@ -252,6 +394,9 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
     try:
         if name == "index_codebase":
             result = await index.run(arguments, _runtime)
+        elif name == "index_status":
+            from codebrain.tools import index_status
+            result = await index_status.run(arguments, _runtime)
         elif name == "query_code":
             result = await query.run(arguments, _runtime)
         elif name == "get_symbol":
@@ -283,6 +428,12 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
 
 async def _serve() -> None:
     _runtime.initialize()
+    _runtime._loop = asyncio.get_event_loop()
+    _runtime.index_sem = asyncio.Semaphore(1)  # serialise concurrent index runs
+
+    if _runtime.config.auto_index_paths:
+        asyncio.create_task(_runtime._auto_index())
+
     async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
         await server.run(read_stream, write_stream, server.create_initialization_options())
 
