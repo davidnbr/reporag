@@ -6,11 +6,13 @@ Supports incremental re-index: skips files unchanged since last index (mtime + h
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
 import sqlite3
 import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -164,6 +166,87 @@ class ChunkIndexer:
             "chunks": len(all_chunks),
             "skipped": len(files) - len(to_index),
         }
+
+    async def index_files_batched_async(
+        self,
+        files: list[Path],
+        incremental: bool = True,
+        file_batch_size: int = 20,
+        on_batch: Callable[[int, int, int], None] | None = None,
+    ) -> dict[str, int]:
+        """
+        Index files in batches, upserting to LanceDB after each batch.
+        Results become queryable after the first batch (~seconds vs minutes).
+
+        on_batch(files_indexed, chunks_indexed, files_skipped) called after each batch.
+        """
+        to_index = [f for f in files if not (incremental and self._is_unchanged(f))]
+        skipped = len(files) - len(to_index)
+        total_chunks = 0
+        files_done = 0
+
+        loop = asyncio.get_event_loop()
+
+        for batch_start in range(0, len(to_index), file_batch_size):
+            batch = to_index[batch_start : batch_start + file_batch_size]
+            batch_chunks: list[Any] = []
+
+            for path in batch:
+                try:
+                    if self._chunk_strategy == "sliding":
+                        chunks = sliding_window_chunks(path, self._chunk_window_lines, self._chunk_overlap_lines)
+                    elif self._chunk_strategy == "hybrid":
+                        chunks = hybrid_chunks(path, self._chunk_window_lines, self._chunk_overlap_lines)
+                    else:
+                        chunks = parse_file(path)
+                    batch_chunks.extend(chunks)
+                except Exception as exc:
+                    logger.warning("Parse failed for %s: %s", path, exc)
+
+            if batch_chunks:
+                texts = [chunk_to_semantic_text(c) for c in batch_chunks]
+                # Offload CPU-bound embedding to thread pool — keeps event loop responsive
+                embeddings = await loop.run_in_executor(
+                    None, self._embedder.encode_corpus, texts, 64
+                )
+                records = [
+                    {
+                        "id": chunk.id,
+                        "file_path": chunk.file_path,
+                        "language": chunk.language,
+                        "chunk_type": chunk.chunk_type,
+                        "name": chunk.name,
+                        "semantic_text": text,
+                        "raw_content": chunk.raw_content[:4000],
+                        "start_line": chunk.start_line,
+                        "end_line": chunk.end_line,
+                        "parent_name": chunk.parent_name or "",
+                        "vector": vec,
+                    }
+                    for chunk, text, vec in zip(batch_chunks, texts, embeddings)
+                ]
+                for path in batch:
+                    self._dense.delete_by_file(str(path))
+                self._dense.upsert(records)
+
+                file_chunk_counts: dict[str, int] = {}
+                for chunk in batch_chunks:
+                    file_chunk_counts[chunk.file_path] = file_chunk_counts.get(chunk.file_path, 0) + 1
+                for path in batch:
+                    self._record_file(path, file_chunk_counts.get(str(path), 0))
+
+                total_chunks += len(batch_chunks)
+
+            files_done += len(batch)
+            if on_batch:
+                on_batch(files_done, total_chunks, skipped)
+
+            await asyncio.sleep(0)  # yield to event loop between batches
+
+        # BM25 rebuild once at end (full scan of LanceDB — fast, <10s for 200k LOC)
+        await loop.run_in_executor(None, self._rebuild_bm25)
+
+        return {"files": files_done, "chunks": total_chunks, "skipped": skipped}
 
     def _rebuild_bm25(self) -> None:
         """Rebuild BM25 index from all chunks currently in LanceDB."""
