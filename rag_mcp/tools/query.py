@@ -38,12 +38,11 @@ async def run(
     if not query:
         return {"error": "query is required"}
 
+    cfg = runtime.config
     k: int = int(arguments.get("k", 10))
-    do_rerank: bool = arguments.get("rerank", True)
+    do_rerank: bool = arguments.get("rerank", cfg.rerank_by_default)
     lang_filter: list[str] | None = arguments.get("languages")
     project_filter: str | None = arguments.get("project")  # filter by file path prefix
-
-    cfg = runtime.config
 
     # ── 1. Dense retrieval ──────────────────────────────────────────────────
     q_vec = runtime.embedder.encode_query(query)

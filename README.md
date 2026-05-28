@@ -24,9 +24,11 @@ codebrain MCP server
 
 ## Benchmarks
 
-Synthetic golden set: 40 named functions/classes from the live index.
+Synthetic golden set: named functions/classes sampled from the live index.
 Query template: `"implementation of {name}"` / `"how does {name} work"`.
 Metric: fraction of queries where the exact chunk appears in top-k (Recall@k), plus MRR@k.
+
+### codebrain (small, 246 chunks, AST strategy)
 
 | Stage      | Recall@5 | Recall@10 | MRR@10 | ms/query |
 |------------|----------|-----------|--------|----------|
@@ -38,6 +40,30 @@ Metric: fraction of queries where the exact chunk appears in top-k (Recall@k), p
 
 `full` = RRF fusion → Reverse PPR hub re-ranking → cross-encoder rerank.
 Reranker cost (~430 ms) trades latency for top-1 precision; disable with `rerank=false` in `query_code`.
+
+### Django (large, 869 files / ~11k chunks, 100 samples)
+
+Validates chunking strategy at scale. PPR requires a dense dependency graph to help — sparse heuristic graphs (857 edges / 11k chunks) show no benefit or slight regression.
+
+| Stage     | Strategy | Recall@5 | Recall@10 | MRR@10 | ms/query |
+|-----------|----------|----------|-----------|--------|----------|
+| dense     | ast      | 0.770    | 0.790     | 0.625  | 35       |
+| dense     | hybrid   | 0.690    | 0.740     | 0.574  | 37       |
+| bm25      | ast      | 0.610    | 0.660     | 0.497  | 1        |
+| bm25      | hybrid   | 0.600    | 0.640     | 0.495  | 1        |
+| rrf       | ast      | 0.750    | **0.850** | 0.634  | 37       |
+| rrf       | hybrid   | 0.670    | 0.780     | 0.566  | 38       |
+| rrf + ppr | ast      | 0.750    | 0.840     | 0.617  | 41       |
+| rrf + ppr | hybrid   | 0.670    | 0.780     | 0.566  | 43       |
+
+AST consistently outperforms hybrid by 5–7 pp on R@10 for **named-symbol queries** (e.g. "implementation of QuerySet"). Hybrid window chunks dilute the dense vector space when exact AST chunks compete against overlapping windows.
+
+**Benchmark caveat:** both tables measure exact named-chunk recall — structurally biased toward AST. The cited paper (arXiv:2605.04763) where sliding window wins tests *code completion at cursor positions*, not NL→code architectural queries. For queries like "how does the ORM query execution flow work?" or "where is middleware processing defined?", hybrid may outperform AST by providing import context and cross-function windows that AST drops — this is untested.
+
+Choose your strategy:
+- `"ast"` (default) — best for symbol lookup, exact function/class retrieval, smaller index, lower latency
+- `"hybrid"` — may improve architectural/contextual queries at the cost of 5–7 pp recall regression on symbol lookup and ~2× indexing latency
+- `"sliding"` — pure windows, no symbol-level precision
 
 Run your own ablation:
 
@@ -138,8 +164,12 @@ Config file: `~/.config/rag-mcp/config.json` (optional — all fields have defau
   "embed_model": "nomic-ai/nomic-embed-text-v1",
   "embed_backend": "sentence-transformers",
   "data_dir": "~/.local/share/rag-mcp",
-  "reranker_model": "cross-encoder/ms-marco-MiniLM-L-6-v2",
+  "reranker_model": "BAAI/bge-reranker-base",
   "reranker_k": 50,
+  "rerank_by_default": false,
+  "chunk_strategy": "ast",
+  "chunk_window_lines": 64,
+  "chunk_overlap_lines": 16,
   "bm25_k1": 1.2,
   "bm25_b": 0.75,
   "rrf_k": 60,
@@ -151,6 +181,10 @@ Config file: `~/.config/rag-mcp/config.json` (optional — all fields have defau
 }
 ```
 
+**`chunk_strategy`**: `"hybrid"` (default) = AST named symbols + sliding windows over uncovered lines. `"ast"` = function/class-level only. `"sliding"` = pure 64-line overlapping windows. Hybrid preserves symbol lookup while filling import and module-level context that function-level chunking drops (arXiv:2605.04763).
+
+**`rerank_by_default`**: off by default. MS MARCO-trained rerankers degrade code retrieval quality (CodeRAG-Bench, arXiv:2406.14497). Enable per-query with `"rerank": true` in `query_code`. Default reranker is `BAAI/bge-reranker-base` (nDCG@10 0.699 vs MiniLM-L6's 0.662, requires HF token on first download).
+
 ### Environment variable overrides
 
 | Variable | Field |
@@ -159,6 +193,10 @@ Config file: `~/.config/rag-mcp/config.json` (optional — all fields have defau
 | `RAG_MCP_EMBED_MODEL` | `embed_model` |
 | `RAG_MCP_EMBED_BACKEND` | `embed_backend` |
 | `RAG_MCP_RERANKER_K` | `reranker_k` |
+| `RAG_MCP_RERANK_BY_DEFAULT` | `rerank_by_default` |
+| `RAG_MCP_CHUNK_STRATEGY` | `chunk_strategy` |
+| `RAG_MCP_CHUNK_WINDOW_LINES` | `chunk_window_lines` |
+| `RAG_MCP_CHUNK_OVERLAP_LINES` | `chunk_overlap_lines` |
 | `RAG_MCP_BM25_K1` | `bm25_k1` |
 | `RAG_MCP_BM25_B` | `bm25_b` |
 | `RAG_MCP_RRF_K` | `rrf_k` |

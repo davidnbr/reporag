@@ -18,6 +18,7 @@ import numpy as np
 
 from rag_mcp.indexer.ast_parser import Chunk, parse_file, detect_language
 from rag_mcp.indexer.semantic_text import chunk_to_semantic_text
+from rag_mcp.indexer.sliding_window import sliding_window_chunks, hybrid_chunks
 
 logger = logging.getLogger(__name__)
 
@@ -41,11 +42,17 @@ class ChunkIndexer:
         embedder: Any,
         dense_index: Any,
         bm25_index: Any,
+        chunk_strategy: str = "hybrid",
+        chunk_window_lines: int = 64,
+        chunk_overlap_lines: int = 16,
     ) -> None:
         self._data_dir = data_dir
         self._embedder = embedder
         self._dense = dense_index
         self._bm25 = bm25_index
+        self._chunk_strategy = chunk_strategy
+        self._chunk_window_lines = chunk_window_lines
+        self._chunk_overlap_lines = chunk_overlap_lines
         self._meta_conn = self._init_meta_db()
 
     def _init_meta_db(self) -> sqlite3.Connection:
@@ -97,7 +104,12 @@ class ChunkIndexer:
         all_chunks: list[Chunk] = []
         for path in to_index:
             try:
-                chunks = parse_file(path)
+                if self._chunk_strategy == "sliding":
+                    chunks = sliding_window_chunks(path, self._chunk_window_lines, self._chunk_overlap_lines)
+                elif self._chunk_strategy == "hybrid":
+                    chunks = hybrid_chunks(path, self._chunk_window_lines, self._chunk_overlap_lines)
+                else:
+                    chunks = parse_file(path)
                 all_chunks.extend(chunks)
             except Exception as exc:
                 logger.warning("Parse failed for %s: %s", path, exc)
