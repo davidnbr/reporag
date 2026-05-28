@@ -63,7 +63,7 @@ class Config(BaseModel):
     # arXiv:2605.04763 tests code completion at cursor — not NL→code retrieval; don't cite for RAG
     # "hybrid" fills import/module-level gaps; "ast" wins on named-symbol recall (benchmark data)
     chunk_strategy: str = "ast"
-    chunk_window_lines: int = 64   # sliding window size in lines (empirically best per arXiv:2605.04763)
+    chunk_window_lines: int = 64   # sliding window size in lines
     chunk_overlap_lines: int = 16  # overlap between adjacent windows
     # Progressive indexing
     index_batch_size: int = 20     # files per embedding batch; smaller = faster first results
