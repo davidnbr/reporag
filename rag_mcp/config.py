@@ -58,8 +58,8 @@ class Config(BaseModel):
     rrf_sparse_weight: float = 0.5      # RRF weight for BM25 (down-weighted; dense is stronger)
     min_graph_edges_for_ppr: int = 50   # minimum graph edges to enable PPR (avoids noise on sparse graphs)
     # Chunking strategy: "ast" (default), "sliding" (window-only), "hybrid" (ast + gap windows)
-    # arXiv:2605.04763: sliding window beats function-level AST by 3.5-5.6 pts on RepoEval
-    # "hybrid" preserves symbol lookup while filling import/module-level gaps
+    # arXiv:2605.04763 tests code completion at cursor — not NL→code retrieval; don't cite for RAG
+    # "hybrid" fills import/module-level gaps; "ast" wins on named-symbol recall (benchmark data)
     chunk_strategy: str = "ast"
     chunk_window_lines: int = 64   # sliding window size in lines (empirically best per arXiv:2605.04763)
     chunk_overlap_lines: int = 16  # overlap between adjacent windows

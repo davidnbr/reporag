@@ -181,7 +181,7 @@ Config file: `~/.config/rag-mcp/config.json` (optional — all fields have defau
 }
 ```
 
-**`chunk_strategy`**: `"hybrid"` (default) = AST named symbols + sliding windows over uncovered lines. `"ast"` = function/class-level only. `"sliding"` = pure 64-line overlapping windows. Hybrid preserves symbol lookup while filling import and module-level context that function-level chunking drops (arXiv:2605.04763).
+**`chunk_strategy`**: `"ast"` (default) = function/class-level symbols only. `"hybrid"` = AST named symbols + sliding windows over uncovered lines. `"sliding"` = pure 64-line overlapping windows. Hybrid fills import and module-level context gaps that pure AST drops.
 
 **`rerank_by_default`**: off by default. MS MARCO-trained rerankers degrade code retrieval quality (CodeRAG-Bench, arXiv:2406.14497). Enable per-query with `"rerank": true` in `query_code`. Default reranker is `BAAI/bge-reranker-base` (nDCG@10 0.699 vs MiniLM-L6's 0.662, requires HF token on first download).
 

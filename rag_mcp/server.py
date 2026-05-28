@@ -132,7 +132,7 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "query": {"type": "string", "description": "Natural language or code query"},
                     "k": {"type": "integer", "default": 10, "description": "Number of results"},
-                    "rerank": {"type": "boolean", "default": True, "description": "Enable cross-encoder reranking"},
+                    "rerank": {"type": "boolean", "description": "Enable cross-encoder reranking (default: rerank_by_default from config, off by default)"},
                     "languages": {"type": "array", "items": {"type": "string"}, "description": "Filter by language (e.g. ['go', 'python'])"},
                     "project": {"type": "string", "description": "Restrict results to this absolute project root path"},
                 },
