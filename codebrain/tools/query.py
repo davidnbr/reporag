@@ -52,7 +52,7 @@ async def run(
     sparse_ids = runtime.bm25.search(query, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []
 
     # ── 3. RRF fusion (weighted: dense=1.0, sparse=0.5) ─────────────────────
-    from rag_mcp.retrieval.rrf import rrf_fuse, top_k as rrf_top_k
+    from codebrain.retrieval.rrf import rrf_fuse, top_k as rrf_top_k
     fused = rrf_fuse(
         [dense_ids, sparse_ids],
         k=cfg.rrf_k,
@@ -71,13 +71,13 @@ async def run(
     # Use reduced PPR weight when graph is heuristic-only (no compiler-grade SCIP edges)
     ppr_weight = 0.4 if graph_edge_count >= cfg.min_graph_edges_for_ppr * 5 else 0.2
     if ppr_enabled:
-        from rag_mcp.retrieval.pagerank import reverse_personalized_pagerank
+        from codebrain.retrieval.pagerank import reverse_personalized_pagerank
         ppr_scores = reverse_personalized_pagerank(
             runtime.graph, seed_ids, alpha=cfg.ppr_alpha, top_k=k * 3
         )
 
     # ── 5. Score merge ──────────────────────────────────────────────────────
-    from rag_mcp.retrieval.pagerank import merge_rrf_ppr
+    from codebrain.retrieval.pagerank import merge_rrf_ppr
     merged = merge_rrf_ppr(fused, ppr_scores, ppr_weight=ppr_weight)
     candidate_ids = [doc_id for doc_id, _ in list(merged.items())[: k * 3]]
 

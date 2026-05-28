@@ -1,6 +1,6 @@
 """Unit tests for RRF fusion — verifies research §4 formula."""
 import pytest
-from rag_mcp.retrieval.rrf import rrf_fuse, top_k
+from codebrain.retrieval.rrf import rrf_fuse, top_k
 
 
 def test_rrf_single_list():

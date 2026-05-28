@@ -1,7 +1,7 @@
 """Unit tests for Reverse Personalized PageRank — verifies research §3."""
 import networkx as nx
 import pytest
-from rag_mcp.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_ppr
+from codebrain.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_ppr
 
 
 def _hub_graph() -> nx.DiGraph:

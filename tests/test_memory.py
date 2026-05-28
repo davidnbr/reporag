@@ -1,7 +1,7 @@
 """Unit tests for MemoryStore — verifies persistence and FTS5 recall."""
 import pytest
 from pathlib import Path
-from rag_mcp.memory.store import MemoryStore
+from codebrain.memory.store import MemoryStore
 
 
 @pytest.fixture()

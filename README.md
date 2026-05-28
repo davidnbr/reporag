@@ -93,15 +93,15 @@ MCP clients then launch the server automatically via `uvx`. No manual install st
 ```json
 {
   "mcpServers": {
-    "rag-mcp": {
+    "codebrain": {
       "command": "uvx",
       "args": [
         "--from",
-        "rag-mcp[ml] @ git+https://github.com/davidnbr/codebrain.git",
-        "rag-mcp"
+        "codebrain[ml] @ git+https://github.com/davidnbr/codebrain.git",
+        "codebrain"
       ],
       "env": {
-        "RAG_MCP_DATA_DIR": "~/.local/share/rag-mcp"
+        "CODEBRAIN_DATA_DIR": "~/.local/share/codebrain"
       }
     }
   }
@@ -117,8 +117,8 @@ Same format as above.
 ```json
 {
   "command": "uvx",
-  "args": ["--from", "rag-mcp[ml] @ git+https://github.com/davidnbr/codebrain.git", "rag-mcp"],
-  "env": { "RAG_MCP_DATA_DIR": "~/.local/share/rag-mcp" }
+  "args": ["--from", "codebrain[ml] @ git+https://github.com/davidnbr/codebrain.git", "codebrain"],
+  "env": { "CODEBRAIN_DATA_DIR": "~/.local/share/codebrain" }
 }
 ```
 
@@ -157,13 +157,13 @@ Persistent knowledge store across sessions.
 
 ## Configuration
 
-Config file: `~/.config/rag-mcp/config.json` (optional — all fields have defaults)
+Config file: `~/.config/codebrain/config.json` (optional — all fields have defaults)
 
 ```json
 {
   "embed_model": "nomic-ai/nomic-embed-text-v1",
   "embed_backend": "sentence-transformers",
-  "data_dir": "~/.local/share/rag-mcp",
+  "data_dir": "~/.local/share/codebrain",
   "reranker_model": "BAAI/bge-reranker-base",
   "reranker_k": 50,
   "rerank_by_default": false,
@@ -189,21 +189,21 @@ Config file: `~/.config/rag-mcp/config.json` (optional — all fields have defau
 
 | Variable | Field |
 |----------|-------|
-| `RAG_MCP_DATA_DIR` | `data_dir` |
-| `RAG_MCP_EMBED_MODEL` | `embed_model` |
-| `RAG_MCP_EMBED_BACKEND` | `embed_backend` |
-| `RAG_MCP_RERANKER_K` | `reranker_k` |
-| `RAG_MCP_RERANK_BY_DEFAULT` | `rerank_by_default` |
-| `RAG_MCP_CHUNK_STRATEGY` | `chunk_strategy` |
-| `RAG_MCP_CHUNK_WINDOW_LINES` | `chunk_window_lines` |
-| `RAG_MCP_CHUNK_OVERLAP_LINES` | `chunk_overlap_lines` |
-| `RAG_MCP_BM25_K1` | `bm25_k1` |
-| `RAG_MCP_BM25_B` | `bm25_b` |
-| `RAG_MCP_RRF_K` | `rrf_k` |
-| `RAG_MCP_PPR_ALPHA` | `ppr_alpha` |
-| `RAG_MCP_DENSE_CANDIDATES` | `dense_candidates` |
-| `RAG_MCP_SPARSE_CANDIDATES` | `sparse_candidates` |
-| `RAG_MCP_SNIPPET_CHARS` | `snippet_chars` |
+| `CODEBRAIN_DATA_DIR` | `data_dir` |
+| `CODEBRAIN_EMBED_MODEL` | `embed_model` |
+| `CODEBRAIN_EMBED_BACKEND` | `embed_backend` |
+| `CODEBRAIN_RERANKER_K` | `reranker_k` |
+| `CODEBRAIN_RERANK_BY_DEFAULT` | `rerank_by_default` |
+| `CODEBRAIN_CHUNK_STRATEGY` | `chunk_strategy` |
+| `CODEBRAIN_CHUNK_WINDOW_LINES` | `chunk_window_lines` |
+| `CODEBRAIN_CHUNK_OVERLAP_LINES` | `chunk_overlap_lines` |
+| `CODEBRAIN_BM25_K1` | `bm25_k1` |
+| `CODEBRAIN_BM25_B` | `bm25_b` |
+| `CODEBRAIN_RRF_K` | `rrf_k` |
+| `CODEBRAIN_PPR_ALPHA` | `ppr_alpha` |
+| `CODEBRAIN_DENSE_CANDIDATES` | `dense_candidates` |
+| `CODEBRAIN_SPARSE_CANDIDATES` | `sparse_candidates` |
+| `CODEBRAIN_SNIPPET_CHARS` | `snippet_chars` |
 
 ## Optional: SCIP CLIs (compiler-grade dependency graph)
 

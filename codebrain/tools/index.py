@@ -9,7 +9,7 @@ logger = logging.getLogger(__name__)
 
 _EXCLUDE_DEFAULTS = {
     "node_modules", ".git", "__pycache__", ".venv", "venv", "env",
-    "dist", "build", ".mypy_cache", ".ruff_cache", "target", ".rag-mcp",
+    "dist", "build", ".mypy_cache", ".ruff_cache", "target", ".codebrain",
     ".devenv", ".direnv", "vendor", "pkg", ".cache",
 }
 
@@ -43,7 +43,7 @@ async def run(
     extra_excludes: list[str] = arguments.get("exclude_patterns", [])
     exclude = _EXCLUDE_DEFAULTS | set(extra_excludes)
 
-    from rag_mcp.indexer.ast_parser import LANGUAGE_EXT, detect_language
+    from codebrain.indexer.ast_parser import LANGUAGE_EXT, detect_language
 
     # Collect all source files
     files: list[Path] = []
@@ -67,7 +67,7 @@ async def run(
     chunk_stats = runtime.chunker.index_files(files, incremental=incremental)
 
     # Build dependency graph
-    from rag_mcp.indexer.graph_builder import build_graph_for_project
+    from codebrain.indexer.graph_builder import build_graph_for_project
     graph_stats = build_graph_for_project(root, files, runtime.graph_db)
 
     # Reload NetworkX graph into runtime

@@ -16,9 +16,9 @@ from typing import Any
 
 import numpy as np
 
-from rag_mcp.indexer.ast_parser import Chunk, parse_file, detect_language
-from rag_mcp.indexer.semantic_text import chunk_to_semantic_text
-from rag_mcp.indexer.sliding_window import sliding_window_chunks, hybrid_chunks
+from codebrain.indexer.ast_parser import Chunk, parse_file, detect_language
+from codebrain.indexer.semantic_text import chunk_to_semantic_text
+from codebrain.indexer.sliding_window import sliding_window_chunks, hybrid_chunks
 
 logger = logging.getLogger(__name__)
 

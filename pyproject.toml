@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "rag-mcp"
+name = "codebrain"
 version = "0.1.0"
 description = "Local-first RAG MCP server: AST chunking, SCIP graph, RRF+PPR retrieval"
 requires-python = ">=3.12"
@@ -44,10 +44,10 @@ dev = [
 ]
 
 [project.scripts]
-rag-mcp = "rag_mcp.server:main"
+codebrain = "codebrain.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["rag_mcp"]
+packages = ["codebrain"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

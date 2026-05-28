@@ -33,16 +33,16 @@ _SEED = 42
 @pytest.fixture(scope="module")
 def runtime() -> Any:
     try:
-        from rag_mcp.server import Runtime
-        from rag_mcp.config import get_config
+        from codebrain.server import Runtime
+        from codebrain.config import get_config
     except ImportError as e:
-        pytest.skip(f"rag_mcp not importable: {e}")
+        pytest.skip(f"codebrain not importable: {e}")
 
     try:
         import lancedb  # noqa: F401
         import sentence_transformers  # noqa: F401
     except ImportError:
-        pytest.skip("ML extras not installed (pip install rag-mcp[ml])")
+        pytest.skip("ML extras not installed (pip install codebrain[ml])")
 
     rt = Runtime(config=get_config())
     try:
@@ -81,7 +81,7 @@ def _top_ids_dense(rt: Any, q_vec: Any, k: int) -> list[str]:
 
 
 def _top_ids_rrf(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
-    from rag_mcp.retrieval.rrf import rrf_fuse, top_k
+    from codebrain.retrieval.rrf import rrf_fuse, top_k
 
     dense_ids = rt.dense.search(q_vec, k=50)
     sparse_ids = rt.bm25.search(query, k=50) if rt.bm25.is_ready else []
@@ -90,8 +90,8 @@ def _top_ids_rrf(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
 
 
 def _top_ids_full(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
-    from rag_mcp.retrieval.rrf import rrf_fuse, top_k
-    from rag_mcp.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_ppr
+    from codebrain.retrieval.rrf import rrf_fuse, top_k
+    from codebrain.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_ppr
 
     dense_ids = rt.dense.search(q_vec, k=50)
     sparse_ids = rt.bm25.search(query, k=50) if rt.bm25.is_ready else []

@@ -28,10 +28,10 @@ _PROJECT = str(Path(__file__).parent.parent.resolve())
 @pytest.fixture(scope="module")
 def runtime() -> Any:
     try:
-        from rag_mcp.server import Runtime
-        from rag_mcp.config import get_config
+        from codebrain.server import Runtime
+        from codebrain.config import get_config
     except ImportError as e:
-        pytest.skip(f"rag_mcp not importable: {e}")
+        pytest.skip(f"codebrain not importable: {e}")
 
     try:
         import lancedb  # noqa: F401
@@ -55,7 +55,7 @@ def runtime() -> Any:
 
 @pytest.mark.asyncio
 async def test_summarize_returns_required_keys(runtime: Any) -> None:
-    from rag_mcp.tools import summarize
+    from codebrain.tools import summarize
     result = await summarize.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result, f"summarize failed: {result['error']}"
@@ -66,7 +66,7 @@ async def test_summarize_returns_required_keys(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_summarize_detects_python(runtime: Any) -> None:
-    from rag_mcp.tools import summarize
+    from codebrain.tools import summarize
     result = await summarize.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -76,7 +76,7 @@ async def test_summarize_detects_python(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_summarize_finds_server_entry_point(runtime: Any) -> None:
-    from rag_mcp.tools import summarize
+    from codebrain.tools import summarize
     result = await summarize.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -88,7 +88,7 @@ async def test_summarize_finds_server_entry_point(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_summarize_has_public_api(runtime: Any) -> None:
-    from rag_mcp.tools import summarize
+    from codebrain.tools import summarize
     result = await summarize.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -99,14 +99,14 @@ async def test_summarize_has_public_api(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_summarize_missing_project_returns_error(runtime: Any) -> None:
-    from rag_mcp.tools import summarize
+    from codebrain.tools import summarize
     result = await summarize.run({"project": ""}, runtime)
     assert "error" in result
 
 
 @pytest.mark.asyncio
 async def test_summarize_nonexistent_project_returns_error(runtime: Any) -> None:
-    from rag_mcp.tools import summarize
+    from codebrain.tools import summarize
     result = await summarize.run({"project": "/tmp/nonexistent_project_xyzzy"}, runtime)
     assert "error" in result
 
@@ -115,7 +115,7 @@ async def test_summarize_nonexistent_project_returns_error(runtime: Any) -> None
 
 @pytest.mark.asyncio
 async def test_architecture_returns_required_keys(runtime: Any) -> None:
-    from rag_mcp.tools import architecture
+    from codebrain.tools import architecture
     result = await architecture.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result, f"architecture failed: {result.get('error')}"
@@ -125,7 +125,7 @@ async def test_architecture_returns_required_keys(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_architecture_nodes_have_required_fields(runtime: Any) -> None:
-    from rag_mcp.tools import architecture
+    from codebrain.tools import architecture
     result = await architecture.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -139,26 +139,26 @@ async def test_architecture_nodes_have_required_fields(runtime: Any) -> None:
 
 
 @pytest.mark.asyncio
-async def test_architecture_layers_contain_rag_mcp(runtime: Any) -> None:
-    from rag_mcp.tools import architecture
+async def test_architecture_layers_contain_codebrain(runtime: Any) -> None:
+    from codebrain.tools import architecture
     result = await architecture.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
-    assert "rag_mcp" in result["layers"], (
-        f"Expected 'rag_mcp' layer, got: {list(result['layers'].keys())}"
+    assert "codebrain" in result["layers"], (
+        f"Expected 'codebrain' layer, got: {list(result['layers'].keys())}"
     )
 
 
 @pytest.mark.asyncio
 async def test_architecture_missing_project_returns_error(runtime: Any) -> None:
-    from rag_mcp.tools import architecture
+    from codebrain.tools import architecture
     result = await architecture.run({"project": ""}, runtime)
     assert "error" in result
 
 
 @pytest.mark.asyncio
 async def test_architecture_counts_match_lists(runtime: Any) -> None:
-    from rag_mcp.tools import architecture
+    from codebrain.tools import architecture
     result = await architecture.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -170,7 +170,7 @@ async def test_architecture_counts_match_lists(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_status_returns_required_keys(runtime: Any) -> None:
-    from rag_mcp.tools import status
+    from codebrain.tools import status
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result, f"status failed: {result.get('error')}"
@@ -181,7 +181,7 @@ async def test_status_returns_required_keys(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_status_health_is_valid(runtime: Any) -> None:
-    from rag_mcp.tools import status
+    from codebrain.tools import status
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -192,7 +192,7 @@ async def test_status_health_is_valid(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_status_todo_counts_match(runtime: Any) -> None:
-    from rag_mcp.tools import status
+    from codebrain.tools import status
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -206,7 +206,7 @@ async def test_status_todo_counts_match(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_status_test_coverage_ratio(runtime: Any) -> None:
-    from rag_mcp.tools import status
+    from codebrain.tools import status
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -218,7 +218,7 @@ async def test_status_test_coverage_ratio(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_status_git_info_present(runtime: Any) -> None:
-    from rag_mcp.tools import status
+    from codebrain.tools import status
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -232,7 +232,7 @@ async def test_status_git_info_present(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_status_missing_project_returns_error(runtime: Any) -> None:
-    from rag_mcp.tools import status
+    from codebrain.tools import status
     result = await status.run({"project": ""}, runtime)
     assert "error" in result
 
@@ -241,7 +241,7 @@ async def test_status_missing_project_returns_error(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_ask_routes_to_summarize(runtime: Any) -> None:
-    from rag_mcp.tools import ask
+    from codebrain.tools import ask
     for query in ("what does this project do", "give me an overview", "describe this codebase"):
         result = await ask.run({"query": query, "project": _PROJECT}, runtime)
         assert "error" not in result, f"ask failed for '{query}': {result.get('error')}"
@@ -252,7 +252,7 @@ async def test_ask_routes_to_summarize(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_ask_routes_to_architecture(runtime: Any) -> None:
-    from rag_mcp.tools import ask
+    from codebrain.tools import ask
     for query in ("show the architecture", "how is the code structured", "what are the layers"):
         result = await ask.run({"query": query, "project": _PROJECT}, runtime)
         assert "error" not in result
@@ -263,7 +263,7 @@ async def test_ask_routes_to_architecture(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_ask_routes_to_status(runtime: Any) -> None:
-    from rag_mcp.tools import ask
+    from codebrain.tools import ask
     for query in ("what's the project status", "any todos left", "show stubs and fixmes"):
         result = await ask.run({"query": query, "project": _PROJECT}, runtime)
         assert "error" not in result
@@ -274,7 +274,7 @@ async def test_ask_routes_to_status(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_ask_falls_back_to_query(runtime: Any) -> None:
-    from rag_mcp.tools import ask
+    from codebrain.tools import ask
     result = await ask.run({"query": "how does RRF fusion work", "project": _PROJECT}, runtime)
     assert "error" not in result
     assert result.get("source_tool") == "query_code", (
@@ -286,13 +286,13 @@ async def test_ask_falls_back_to_query(runtime: Any) -> None:
 
 @pytest.mark.asyncio
 async def test_ask_missing_query_returns_error(runtime: Any) -> None:
-    from rag_mcp.tools import ask
+    from codebrain.tools import ask
     result = await ask.run({"query": "", "project": _PROJECT}, runtime)
     assert "error" in result
 
 
 @pytest.mark.asyncio
 async def test_ask_result_includes_source_tool(runtime: Any) -> None:
-    from rag_mcp.tools import ask
+    from codebrain.tools import ask
     result = await ask.run({"query": "what is this", "project": _PROJECT}, runtime)
     assert "source_tool" in result, "ask_project must always set source_tool"

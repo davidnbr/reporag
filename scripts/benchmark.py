@@ -45,8 +45,8 @@ _CHUNK_TYPES = {"function", "class", "method"}
 # ── Runtime ──────────────────────────────────────────────────────────────────
 
 def _build_runtime(data_dir: str | None) -> Any:
-    from rag_mcp.server import Runtime
-    from rag_mcp.config import get_config, Config
+    from codebrain.server import Runtime
+    from codebrain.config import get_config, Config
 
     cfg = get_config()
     if data_dir:
@@ -89,7 +89,7 @@ def _stage_bm25(rt: Any, _q_vec: Any, query: str, k: int) -> list[str]:
 
 
 def _stage_rrf(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
-    from rag_mcp.retrieval.rrf import rrf_fuse, top_k
+    from codebrain.retrieval.rrf import rrf_fuse, top_k
 
     dense_ids = rt.dense.search(q_vec, k=50)
     sparse_ids = rt.bm25.search(query, k=50) if rt.bm25.is_ready else []
@@ -98,8 +98,8 @@ def _stage_rrf(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
 
 
 def _stage_rrf_ppr(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
-    from rag_mcp.retrieval.rrf import rrf_fuse, top_k
-    from rag_mcp.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_ppr
+    from codebrain.retrieval.rrf import rrf_fuse, top_k
+    from codebrain.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_ppr
 
     dense_ids = rt.dense.search(q_vec, k=50)
     sparse_ids = rt.bm25.search(query, k=50) if rt.bm25.is_ready else []
@@ -115,8 +115,8 @@ def _stage_rrf_ppr(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
 
 
 def _stage_full(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
-    from rag_mcp.retrieval.rrf import rrf_fuse, top_k
-    from rag_mcp.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_ppr
+    from codebrain.retrieval.rrf import rrf_fuse, top_k
+    from codebrain.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_ppr
 
     dense_ids = rt.dense.search(q_vec, k=50)
     sparse_ids = rt.bm25.search(query, k=50) if rt.bm25.is_ready else []
@@ -167,7 +167,7 @@ def main() -> None:
     parser.add_argument("--k", nargs="+", type=int, default=[5, 10], metavar="K")
     parser.add_argument("--samples", type=int, default=100, help="Max golden queries")
     parser.add_argument("--project", type=str, help="Restrict to project root path")
-    parser.add_argument("--data-dir", type=str, help="Override RAG_MCP_DATA_DIR")
+    parser.add_argument("--data-dir", type=str, help="Override CODEBRAIN_DATA_DIR")
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--stages", nargs="+", choices=list(_STAGES), default=list(_STAGES))
     parser.add_argument("--quiet", action="store_true", help="Suppress progress output")

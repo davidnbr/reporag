@@ -16,8 +16,8 @@ from typing import Any
 
 import networkx as nx
 
-from rag_mcp.indexer import scip_indexer
-from rag_mcp.indexer.heuristic_graph import extract_imports
+from codebrain.indexer import scip_indexer
+from codebrain.indexer.heuristic_graph import extract_imports
 
 logger = logging.getLogger(__name__)
 
@@ -136,7 +136,7 @@ def build_graph_for_project(
     Returns coverage stats: {'scip': N, 'heuristic': M}.
     """
     # Detect languages present in this file list
-    from rag_mcp.indexer.ast_parser import detect_language
+    from codebrain.indexer.ast_parser import detect_language
 
     if scip_languages is None:
         scip_languages = scip_indexer.available_languages()

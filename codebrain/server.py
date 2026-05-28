@@ -21,7 +21,7 @@ import mcp.server.stdio
 from mcp import types
 from mcp.server import Server
 
-from rag_mcp.config import get_config, Config
+from codebrain.config import get_config, Config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -49,13 +49,13 @@ class Runtime:
         data = self._data_dir()
         data.mkdir(parents=True, exist_ok=True)
 
-        from rag_mcp.indexer.embedder import Embedder
-        from rag_mcp.retrieval.dense import DenseIndex
-        from rag_mcp.retrieval.sparse import BM25Index
-        from rag_mcp.retrieval.reranker import CrossEncoderReranker
-        from rag_mcp.indexer.graph_builder import GraphDB
-        from rag_mcp.memory.store import MemoryStore
-        from rag_mcp.indexer.chunker import ChunkIndexer
+        from codebrain.indexer.embedder import Embedder
+        from codebrain.retrieval.dense import DenseIndex
+        from codebrain.retrieval.sparse import BM25Index
+        from codebrain.retrieval.reranker import CrossEncoderReranker
+        from codebrain.indexer.graph_builder import GraphDB
+        from codebrain.memory.store import MemoryStore
+        from codebrain.indexer.chunker import ChunkIndexer
 
         self.embedder = Embedder(
             model=self.config.embed_model,
@@ -96,7 +96,7 @@ class Runtime:
 
 _runtime = Runtime()
 
-server = Server("rag-mcp")
+server = Server("codebrain")
 
 
 @server.list_tools()
@@ -247,7 +247,7 @@ async def list_tools() -> list[types.Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
-    from rag_mcp.tools import index, query, symbol, memory as mem_tools
+    from codebrain.tools import index, query, symbol, memory as mem_tools
 
     try:
         if name == "index_codebase":
@@ -261,16 +261,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
         elif name == "recall":
             result = await mem_tools.run_recall(arguments, _runtime)
         elif name == "summarize_project":
-            from rag_mcp.tools import summarize
+            from codebrain.tools import summarize
             result = await summarize.run(arguments, _runtime)
         elif name == "get_architecture":
-            from rag_mcp.tools import architecture
+            from codebrain.tools import architecture
             result = await architecture.run(arguments, _runtime)
         elif name == "project_status":
-            from rag_mcp.tools import status
+            from codebrain.tools import status
             result = await status.run(arguments, _runtime)
         elif name == "ask_project":
-            from rag_mcp.tools import ask
+            from codebrain.tools import ask
             result = await ask.run(arguments, _runtime)
         else:
             result = {"error": f"Unknown tool: {name}"}
