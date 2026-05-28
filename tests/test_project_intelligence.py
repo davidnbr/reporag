@@ -28,8 +28,8 @@ _PROJECT = str(Path(__file__).parent.parent.resolve())
 @pytest.fixture(scope="module")
 def runtime() -> Any:
     try:
-        from codebrain.server import Runtime
         from codebrain.config import get_config
+        from codebrain.server import Runtime
     except ImportError as e:
         pytest.skip(f"codebrain not importable: {e}")
 

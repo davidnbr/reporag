@@ -6,7 +6,7 @@ from typing import Any
 
 async def run(
     arguments: dict[str, Any],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
 ) -> dict[str, Any]:
     """
     Execute get_symbol tool.

@@ -1,6 +1,7 @@
 """Unit tests for MemoryStore — verifies persistence and FTS5 recall."""
-import pytest
 from pathlib import Path
+
+import pytest
 from codebrain.memory.store import MemoryStore
 
 

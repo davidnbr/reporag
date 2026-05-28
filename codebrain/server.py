@@ -14,7 +14,6 @@ import asyncio
 import json
 import logging
 import threading
-import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -23,7 +22,7 @@ import mcp.server.stdio
 from mcp import types
 from mcp.server import Server
 
-from codebrain.config import get_config, Config
+from codebrain.config import Config, get_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -49,7 +48,7 @@ class IndexTask:
 class _ChangeHandler:
     """Watchdog event handler: debounces file changes and triggers incremental reindex."""
 
-    def __init__(self, runtime: "Runtime", loop: asyncio.AbstractEventLoop) -> None:
+    def __init__(self, runtime: Runtime, loop: asyncio.AbstractEventLoop) -> None:
         self._runtime = runtime
         self._loop = loop
         self._pending: set[str] = set()
@@ -144,13 +143,13 @@ class Runtime:
         data = self._data_dir()
         data.mkdir(parents=True, exist_ok=True)
 
+        from codebrain.indexer.chunker import ChunkIndexer
         from codebrain.indexer.embedder import Embedder
-        from codebrain.retrieval.dense import DenseIndex
-        from codebrain.retrieval.sparse import BM25Index
-        from codebrain.retrieval.reranker import CrossEncoderReranker
         from codebrain.indexer.graph_builder import GraphDB
         from codebrain.memory.store import MemoryStore
-        from codebrain.indexer.chunker import ChunkIndexer
+        from codebrain.retrieval.dense import DenseIndex
+        from codebrain.retrieval.reranker import CrossEncoderReranker
+        from codebrain.retrieval.sparse import BM25Index
 
         self.embedder = Embedder(
             model=self.config.embed_model,
@@ -389,7 +388,8 @@ async def list_tools() -> list[types.Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
-    from codebrain.tools import index, query, symbol, memory as mem_tools
+    from codebrain.tools import index, query, symbol
+    from codebrain.tools import memory as mem_tools
 
     try:
         if name == "index_codebase":

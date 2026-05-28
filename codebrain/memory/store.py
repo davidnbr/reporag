@@ -14,7 +14,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-
 CREATE_MEMORIES = """
 CREATE TABLE IF NOT EXISTS memories (
     id       TEXT PRIMARY KEY,

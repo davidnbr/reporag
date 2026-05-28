@@ -1,7 +1,6 @@
 """MCP tool: summarize_project — structured project overview."""
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from typing import Any
 
@@ -35,7 +34,7 @@ _SKIP_DIRS = {".devenv", ".venv", "venv", "env", "node_modules", ".git", "__pyca
 
 async def run(
     arguments: dict[str, Any],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
 ) -> dict[str, Any]:
     project = arguments.get("project", "").strip()
     if not project:

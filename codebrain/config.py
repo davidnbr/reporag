@@ -4,7 +4,7 @@ import json
 import os
 from pathlib import Path
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 CONFIG_PATH = Path.home() / ".config" / "codebrain" / "config.json"
 

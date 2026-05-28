@@ -12,7 +12,6 @@ from typing import Any
 
 import numpy as np
 
-
 TABLE_NAME = "code_chunks"
 
 

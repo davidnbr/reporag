@@ -1,5 +1,4 @@
 """Unit tests for RRF fusion — verifies research §4 formula."""
-import pytest
 from codebrain.retrieval.rrf import rrf_fuse, top_k
 
 

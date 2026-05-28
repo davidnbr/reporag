@@ -113,8 +113,9 @@ def _parse_scip_output(scip_path: Path, root: Path) -> list[SCIPEdge]:
             Index = scip_pb2.Index
         except ImportError:
             try:
-                from google.protobuf import descriptor_pb2 as _  # noqa: F401, PLC0415
                 import importlib
+
+                from google.protobuf import descriptor_pb2 as _  # noqa: F401, PLC0415
                 scip_mod = importlib.import_module("scip.scip_pb2")
                 Index = scip_mod.Index
             except (ImportError, AttributeError):

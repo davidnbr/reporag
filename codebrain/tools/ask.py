@@ -24,7 +24,7 @@ _ROUTES: list[tuple[list[str], str]] = [
 
 async def run(
     arguments: dict[str, Any],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
 ) -> dict[str, Any]:
     raw_query: str = arguments.get("query", "").strip()
     project: str = arguments.get("project", "")

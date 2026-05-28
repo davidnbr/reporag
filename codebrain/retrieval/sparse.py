@@ -16,8 +16,6 @@ import pickle
 import re
 from pathlib import Path
 
-import numpy as np
-
 
 def _code_tokenize(text: str) -> str:
     """Split code identifiers for BM25 matching.
@@ -83,7 +81,7 @@ class BM25Index:
             pickle.dump(self._retriever, f)
 
     @classmethod
-    def load(cls, path: Path, k1: float = 1.2, b: float = 0.75) -> "BM25Index":
+    def load(cls, path: Path, k1: float = 1.2, b: float = 0.75) -> BM25Index:
         """Load a previously saved index."""
         idx = cls(k1=k1, b=b)
         with open(path / "doc_ids.json") as f:

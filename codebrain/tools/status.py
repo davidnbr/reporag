@@ -29,7 +29,7 @@ def _git_activity(project: str) -> dict[str, Any]:
 
 async def run(
     arguments: dict[str, Any],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
 ) -> dict[str, Any]:
     project = arguments.get("project", "").strip()
     if not project:
@@ -89,7 +89,7 @@ async def run(
     health = "good"
     if len(todos) > 20 or len(stubs) > 5:
         health = "needs-attention"
-    if not git_info.get("available", True) is False and git_info.get("files_changed_30d", 1) == 0:
+    if git_info.get("available", True) is not False and git_info.get("files_changed_30d", 1) == 0:
         health = "stale"
 
     return {

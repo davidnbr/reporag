@@ -17,7 +17,7 @@ def _classify_role(out_deg: int, in_deg: int) -> str:
 
 async def run(
     arguments: dict[str, Any],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
 ) -> dict[str, Any]:
     project = arguments.get("project", "").strip()
     if not project:

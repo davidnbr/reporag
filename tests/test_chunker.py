@@ -7,7 +7,7 @@ import pytest
 tree_sitter = pytest.importorskip("tree_sitter", reason="tree-sitter not installed")
 pytest.importorskip("tree_sitter_python", reason="tree-sitter-python not installed")
 
-from codebrain.indexer.ast_parser import parse_file, detect_language, Chunk  # noqa: E402
+from codebrain.indexer.ast_parser import Chunk, detect_language, parse_file  # noqa: E402
 from codebrain.indexer.semantic_text import chunk_to_semantic_text  # noqa: E402
 
 

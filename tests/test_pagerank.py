@@ -1,7 +1,6 @@
 """Unit tests for Reverse Personalized PageRank — verifies research §3."""
 import networkx as nx
-import pytest
-from codebrain.retrieval.pagerank import reverse_personalized_pagerank, merge_rrf_ppr
+from codebrain.retrieval.pagerank import merge_rrf_ppr, reverse_personalized_pagerank
 
 
 def _hub_graph() -> nx.DiGraph:
@@ -41,7 +40,7 @@ def test_reverse_ppr_seed_bias():
     G.add_edge("a", "b")
     G.add_edge("b", "c")
     scores_a = reverse_personalized_pagerank(G, seed_nodes=["a"], alpha=0.85, top_k=10)
-    scores_c = reverse_personalized_pagerank(G, seed_nodes=["c"], alpha=0.85, top_k=10)
+    _scores_c = reverse_personalized_pagerank(G, seed_nodes=["c"], alpha=0.85, top_k=10)
     # When seeded on 'a', 'a' should appear in results
     assert "a" in scores_a or "b" in scores_a
 

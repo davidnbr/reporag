@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 async def run(
     arguments: dict[str, Any],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
 ) -> dict[str, Any]:
     """
     Execute query_code tool.
@@ -52,7 +52,8 @@ async def run(
     sparse_ids = runtime.bm25.search(query, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []
 
     # ── 3. RRF fusion (weighted: dense=1.0, sparse=0.5) ─────────────────────
-    from codebrain.retrieval.rrf import rrf_fuse, top_k as rrf_top_k
+    from codebrain.retrieval.rrf import rrf_fuse
+    from codebrain.retrieval.rrf import top_k as rrf_top_k
     fused = rrf_fuse(
         [dense_ids, sparse_ids],
         k=cfg.rrf_k,
@@ -114,7 +115,7 @@ async def run(
 
 def _expand_subgraph(
     chunks: list[dict[str, Any]],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
     hops: int,
 ) -> list[dict[str, Any]]:
     """Add k-hop neighbor file paths to each result's metadata."""

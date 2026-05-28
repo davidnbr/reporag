@@ -52,7 +52,7 @@ def _extract_return_type(raw: str) -> str:
     return ""
 
 
-def chunk_to_semantic_text(chunk: "Chunk") -> str:
+def chunk_to_semantic_text(chunk: Chunk) -> str:
     """
     Convert a Chunk to embeddable natural-language-like text.
 

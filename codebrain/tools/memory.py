@@ -8,7 +8,7 @@ VALID_CATEGORIES = {"decision", "discovery", "pattern", "architecture", "note", 
 
 async def run_remember(
     arguments: dict[str, Any],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
 ) -> dict[str, Any]:
     """
     Execute remember tool.
@@ -36,7 +36,7 @@ async def run_remember(
 
 async def run_recall(
     arguments: dict[str, Any],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
 ) -> dict[str, Any]:
     """
     Execute recall tool.
