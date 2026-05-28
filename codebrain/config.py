@@ -31,6 +31,8 @@ _ENV_MAP = {
     "CODEBRAIN_CHUNK_STRATEGY": "chunk_strategy",
     "CODEBRAIN_CHUNK_WINDOW_LINES": "chunk_window_lines",
     "CODEBRAIN_CHUNK_OVERLAP_LINES": "chunk_overlap_lines",
+    "CODEBRAIN_INDEX_BATCH_SIZE": "index_batch_size",
+    "CODEBRAIN_WATCH_DEBOUNCE_S": "watch_debounce_s",
 }
 
 
@@ -63,6 +65,10 @@ class Config(BaseModel):
     chunk_strategy: str = "ast"
     chunk_window_lines: int = 64   # sliding window size in lines (empirically best per arXiv:2605.04763)
     chunk_overlap_lines: int = 16  # overlap between adjacent windows
+    # Progressive indexing
+    index_batch_size: int = 20     # files per embedding batch; smaller = faster first results
+    watch_debounce_s: float = 2.0  # seconds to debounce watchdog file-change events
+    auto_index_paths: list[str] = []  # absolute paths to index on server startup
 
 
 def load_config() -> Config:
@@ -71,18 +77,24 @@ def load_config() -> Config:
         with open(CONFIG_PATH) as f:
             data = json.load(f)
     fields = Config.model_fields
-    for env_key, field in _ENV_MAP.items():
+    for env_key, field_name in _ENV_MAP.items():
         if val := os.environ.get(env_key):
-            annotation = fields[field].annotation if field in fields else str
+            annotation = fields[field_name].annotation if field_name in fields else str
             try:
                 if annotation is int:
-                    data[field] = int(val)
+                    data[field_name] = int(val)
                 elif annotation is float:
-                    data[field] = float(val)
+                    data[field_name] = float(val)
+                elif annotation == list[str]:
+                    # Accept JSON array or colon-separated paths
+                    if val.startswith("["):
+                        data[field_name] = json.loads(val)
+                    else:
+                        data[field_name] = [p for p in val.split(":") if p]
                 else:
-                    data[field] = val
+                    data[field_name] = val
             except (ValueError, TypeError):
-                data[field] = val
+                data[field_name] = val
     return Config(**data)
 
 
