@@ -1,7 +1,14 @@
-"""MCP tool: index_codebase — parse, embed, and graph-index a project directory."""
+"""MCP tool: index_codebase — parse, embed, and graph-index a project directory.
+
+Returns immediately with a task_id. Indexing runs in background; first batch
+of results is queryable within seconds. Use index_status to track progress.
+"""
 from __future__ import annotations
 
+import asyncio
 import logging
+import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -13,23 +20,79 @@ _EXCLUDE_DEFAULTS = {
     ".devenv", ".direnv", "vendor", "pkg", ".cache",
 }
 
+# Files indexed first — LLMs ask about entry points immediately
+_ENTRY_POINTS = {
+    "main.py", "app.py", "server.py", "__init__.py", "cli.py", "wsgi.py", "asgi.py",
+    "main.ts", "index.ts", "app.ts", "server.ts", "index.js", "main.js",
+    "main.go",
+    "main.rs", "lib.rs", "mod.rs",
+    "Main.java", "Application.java",
+    "main.c", "main.cpp",
+}
+
+
+def _priority_sort(files: list[Path]) -> list[Path]:
+    """Entry points first, then most-recently-modified first."""
+    def score(f: Path) -> tuple:
+        return (0 if f.name in _ENTRY_POINTS else 1, -f.stat().st_mtime)
+    return sorted(files, key=score)
+
+
+async def _run_index_bg(
+    task_id: str,
+    root: Path,
+    files: list[Path],
+    incremental: bool,
+    runtime: Any,
+) -> None:
+    """Background coroutine: runs full index pipeline, updates task progress."""
+    task = runtime.index_tasks[task_id]
+    try:
+        async with runtime.index_sem:
+            def on_batch(files_done: int, chunks_done: int, skipped: int) -> None:
+                task.indexed_files = files_done
+                task.indexed_chunks = chunks_done
+                task.skipped_files = skipped
+
+            chunk_stats = await runtime.chunker.index_files_batched_async(
+                files,
+                incremental=incremental,
+                file_batch_size=runtime.config.index_batch_size,
+                on_batch=on_batch,
+            )
+
+            from codebrain.indexer.graph_builder import build_graph_for_project
+            loop = asyncio.get_event_loop()
+            graph_stats = await loop.run_in_executor(
+                None, build_graph_for_project, root, files, runtime.graph_db
+            )
+            runtime.reload_graph()
+            if runtime.reranker is not None:
+                runtime.reranker.invalidate_cache()
+
+            task.graph_edges_scip = graph_stats.get("scip", 0)
+            task.graph_edges_heuristic = graph_stats.get("heuristic", 0)
+            task.indexed_files = chunk_stats["files"]
+            task.indexed_chunks = chunk_stats["chunks"]
+            task.skipped_files = chunk_stats["skipped"]
+            task.status = "done"
+            task.finished_at = time.monotonic()
+            logger.info(
+                "Index task %s done: %d files, %d chunks (%.1fs)",
+                task_id, task.indexed_files, task.indexed_chunks,
+                task.finished_at - task.started_at,
+            )
+    except Exception as exc:
+        task.status = "error"
+        task.error = str(exc)
+        task.finished_at = time.monotonic()
+        logger.exception("Index task %s failed", task_id)
+
 
 async def run(
     arguments: dict[str, Any],
-    runtime: "Runtime",  # type: ignore[name-defined]  # noqa: F821
+    runtime: Any,
 ) -> dict[str, Any]:
-    """
-    Execute index_codebase tool.
-
-    Args:
-        arguments: {
-            path: str (required) — absolute or relative project root,
-            incremental: bool (default True),
-            languages: list[str] | None — restrict to these languages,
-            exclude_patterns: list[str] | None — additional dir names to skip,
-        }
-        runtime: shared server runtime state.
-    """
     raw_path = arguments.get("path", ".")
     root = Path(raw_path).expanduser().resolve()
 
@@ -43,9 +106,8 @@ async def run(
     extra_excludes: list[str] = arguments.get("exclude_patterns", [])
     exclude = _EXCLUDE_DEFAULTS | set(extra_excludes)
 
-    from codebrain.indexer.ast_parser import LANGUAGE_EXT, detect_language
+    from codebrain.indexer.ast_parser import detect_language
 
-    # Collect all source files
     files: list[Path] = []
     for f in root.rglob("*"):
         if f.is_file() and not any(part in exclude for part in f.parts):
@@ -54,39 +116,39 @@ async def run(
                 files.append(f)
 
     if not files:
-        return {"indexed_files": 0, "chunks": 0, "graph_edges": 0, "message": "No supported source files found."}
+        return {
+            "indexed_files": 0, "chunks": 0, "graph_edges": 0,
+            "message": "No supported source files found.",
+        }
 
-    logger.info("Found %d source files in %s", len(files), root)
+    files = _priority_sort(files)
 
-    # Chunk + embed
-    import time
-    t0 = time.monotonic()
-    if not incremental:
-        deleted = runtime.dense.delete_by_project(str(root))
-        logger.info("Full re-index: removed %d stale chunks for %s", deleted, root)
-    chunk_stats = runtime.chunker.index_files(files, incremental=incremental)
+    task_id = uuid.uuid4().hex[:12]
+    from codebrain.server import IndexTask
+    task = IndexTask(
+        task_id=task_id,
+        project=str(root),
+        started_at=time.monotonic(),
+        total_files=len(files),
+        incremental=incremental,
+    )
+    runtime.index_tasks[task_id] = task
 
-    # Build dependency graph
-    from codebrain.indexer.graph_builder import build_graph_for_project
-    graph_stats = build_graph_for_project(root, files, runtime.graph_db)
+    # Track project for file watcher
+    runtime.watched_projects.add(str(root))
+    runtime._start_watcher(str(root))
 
-    # Reload NetworkX graph into runtime
-    runtime.reload_graph()
-
-    # Invalidate reranker cache — indexed content changed
-    if runtime.reranker is not None:
-        runtime.reranker.invalidate_cache()
-
-    elapsed = time.monotonic() - t0
-    coverage = runtime.graph_db.coverage_report()
+    asyncio.create_task(_run_index_bg(task_id, root, files, incremental, runtime))
 
     return {
-        "indexed_files": chunk_stats["files"],
-        "skipped_files": chunk_stats["skipped"],
-        "chunks": chunk_stats["chunks"],
-        "graph_edges_scip": graph_stats.get("scip", 0),
-        "graph_edges_heuristic": graph_stats.get("heuristic", 0),
-        "graph_coverage": coverage,
-        "duration_s": round(elapsed, 2),
-        "root": str(root),
+        "status": "indexing_started",
+        "task_id": task_id,
+        "total_files": len(files),
+        "incremental": incremental,
+        "project": str(root),
+        "message": (
+            f"Indexing {len(files)} files in background. "
+            f"First results available after batch 1 (~{runtime.config.index_batch_size} files). "
+            f"Use index_status to track progress."
+        ),
     }
