@@ -1,4 +1,5 @@
 """MCP tool: index_status — query background indexing task progress."""
+
 from __future__ import annotations
 
 import time
@@ -38,8 +39,7 @@ def _task_dict(task: Any) -> dict[str, Any]:
         "status": task.status,
         "incremental": task.incremental,
         "progress_pct": (
-            round(100 * task.indexed_files / task.total_files, 1)
-            if task.total_files > 0 else 100.0
+            round(100 * task.indexed_files / task.total_files, 1) if task.total_files > 0 else 100.0
         ),
         "indexed_files": task.indexed_files,
         "total_files": task.total_files,

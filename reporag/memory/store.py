@@ -5,6 +5,7 @@ Storage: SQLite with FTS5 virtual table for keyword search.
 Retrieval: FTS5 MATCH (keyword) + optional numpy cosine for embedding similarity.
 Zero external dependencies beyond stdlib sqlite3.
 """
+
 from __future__ import annotations
 
 import hashlib

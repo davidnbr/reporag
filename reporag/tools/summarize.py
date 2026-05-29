@@ -1,4 +1,5 @@
 """MCP tool: summarize_project — structured project overview."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -75,15 +76,18 @@ async def run(
         project_nodes = [n for n in runtime.graph.nodes() if n.startswith(root_str)]
         ranked = sorted(project_nodes, key=lambda n: runtime.graph.in_degree(n), reverse=True)[:10]
         for node in ranked:
-            rel = node[len(root_str):].lstrip("/")
+            rel = node[len(root_str) :].lstrip("/")
             out_deg = runtime.graph.out_degree(node)
             in_deg = runtime.graph.in_degree(node)
             role = "hub" if out_deg > 5 else ("utility" if in_deg > 3 else "module")
-            components.append({"file": rel, "role": role, "imported_by": in_deg, "imports": out_deg})
+            components.append(
+                {"file": rel, "role": role, "imported_by": in_deg, "imports": out_deg}
+            )
 
     # ── public symbols (exported functions/classes) ───────────────────────────
     public_api = [
-        r["name"] for r in rows
+        r["name"]
+        for r in rows
         if r.get("chunk_type") in ("function", "class")
         and r.get("name")
         and not r.get("name", "").startswith("_")

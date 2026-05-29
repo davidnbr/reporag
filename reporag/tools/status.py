@@ -1,4 +1,5 @@
 """MCP tool: project_status — TODOs, stubs, test coverage, git activity."""
+
 from __future__ import annotations
 
 import re
@@ -6,21 +7,34 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-_TODO_RE = re.compile(r'\b(TODO|FIXME|HACK|XXX)\b[:\s]*(.*)', re.IGNORECASE)
-_STUB_RE = re.compile(r'^\s*(pass|raise\s+NotImplementedError[^\n]*)\s*$', re.MULTILINE)
+_TODO_RE = re.compile(r"\b(TODO|FIXME|HACK|XXX)\b[:\s]*(.*)", re.IGNORECASE)
+_STUB_RE = re.compile(r"^\s*(pass|raise\s+NotImplementedError[^\n]*)\s*$", re.MULTILINE)
 
 
 def _git_activity(project: str) -> dict[str, Any]:
     try:
         changed = subprocess.run(
-            ["git", "-C", project, "log", "--since=30.days", "--name-only", "--format=", "--no-merges"],
-            capture_output=True, text=True, timeout=5,
+            [
+                "git",
+                "-C",
+                project,
+                "log",
+                "--since=30.days",
+                "--name-only",
+                "--format=",
+                "--no-merges",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         files_30d = len({f for f in changed.stdout.strip().split("\n") if f.strip()})
 
         last = subprocess.run(
             ["git", "-C", project, "log", "-1", "--format=%cr"],
-            capture_output=True, text=True, timeout=5,
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         return {"files_changed_30d": files_30d, "last_commit": last.stdout.strip()}
     except Exception:
@@ -50,11 +64,13 @@ async def run(
     for r in rows:
         text = (r.get("raw_content") or "") + " " + (r.get("semantic_text") or "")
         for m in _TODO_RE.finditer(text):
-            todos.append({
-                "file": r.get("file_path", "")[len(root_str):].lstrip("/"),
-                "type": m.group(1).upper(),
-                "text": m.group(2).strip()[:120],
-            })
+            todos.append(
+                {
+                    "file": r.get("file_path", "")[len(root_str) :].lstrip("/"),
+                    "type": m.group(1).upper(),
+                    "text": m.group(2).strip()[:120],
+                }
+            )
         if len(todos) >= 100:
             break
 
@@ -69,17 +85,18 @@ async def run(
             continue
         body = "\n".join(lines[1:]).strip()
         if body and _STUB_RE.match(body) and len(body) < 80:
-            stubs.append({
-                "file": r.get("file_path", "")[len(root_str):].lstrip("/"),
-                "name": r.get("name", ""),
-                "type": r.get("chunk_type", ""),
-            })
+            stubs.append(
+                {
+                    "file": r.get("file_path", "")[len(root_str) :].lstrip("/"),
+                    "name": r.get("name", ""),
+                    "type": r.get("chunk_type", ""),
+                }
+            )
 
     # ── test coverage ─────────────────────────────────────────────────────────
     source_files = {r.get("file_path", "") for r in rows}
     test_files = [
-        f for f in source_files
-        if "/test" in f or f.endswith("_test.py") or "/tests/" in f
+        f for f in source_files if "/test" in f or f.endswith("_test.py") or "/tests/" in f
     ]
 
     # ── git ───────────────────────────────────────────────────────────────────

@@ -10,6 +10,7 @@ Run:
 Synthetic golden set: named chunks (functions/classes) extracted from the live index.
 Query: "implementation of {name}" — expects chunk's own ID in top-k.
 """
+
 from __future__ import annotations
 
 import random
@@ -29,6 +30,7 @@ _SEED = 42
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def runtime() -> Any:
@@ -76,6 +78,7 @@ def golden(runtime: Any) -> list[tuple[str, str]]:
 
 # ── Retrieval helpers ─────────────────────────────────────────────────────────
 
+
 def _top_ids_dense(rt: Any, q_vec: Any, k: int) -> list[str]:
     return rt.dense.search(q_vec, k=k)
 
@@ -103,7 +106,7 @@ def _top_ids_full(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
         ppr_scores = reverse_personalized_pagerank(rt.graph, seeds, alpha=0.85, top_k=k * 3)
 
     merged = merge_rrf_ppr(fused, ppr_scores)
-    candidate_ids = list(merged.keys())[:k * 3]
+    candidate_ids = list(merged.keys())[: k * 3]
     candidates = rt.dense.get_chunks(candidate_ids)
 
     if candidates and len(candidates) <= 50:
@@ -123,6 +126,7 @@ def _mrr(pairs: list[tuple[str, list[str]]]) -> float:
 
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
 
 def test_full_pipeline_recall_at_10(runtime: Any, golden: list) -> None:
     """Full pipeline Recall@10 >= 0.5 on synthetic golden set."""

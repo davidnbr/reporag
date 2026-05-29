@@ -5,6 +5,7 @@ LanceDB stores chunk embeddings in Lance columnar format.
 Cosine similarity search: score(q, d) = (v_q · v_d) / (||v_q|| ||v_d||)
 Embeddings pre-normalized at index time so dot product == cosine.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -17,19 +18,22 @@ TABLE_NAME = "code_chunks"
 
 def _schema(dim: int) -> Any:
     import pyarrow as pa
-    return pa.schema([
-        pa.field("id", pa.string()),
-        pa.field("file_path", pa.string()),
-        pa.field("language", pa.string()),
-        pa.field("chunk_type", pa.string()),
-        pa.field("name", pa.string()),
-        pa.field("semantic_text", pa.string()),
-        pa.field("raw_content", pa.string()),
-        pa.field("start_line", pa.int32()),
-        pa.field("end_line", pa.int32()),
-        pa.field("parent_name", pa.string()),
-        pa.field("vector", pa.list_(pa.float32(), dim)),
-    ])
+
+    return pa.schema(
+        [
+            pa.field("id", pa.string()),
+            pa.field("file_path", pa.string()),
+            pa.field("language", pa.string()),
+            pa.field("chunk_type", pa.string()),
+            pa.field("name", pa.string()),
+            pa.field("semantic_text", pa.string()),
+            pa.field("raw_content", pa.string()),
+            pa.field("start_line", pa.int32()),
+            pa.field("end_line", pa.int32()),
+            pa.field("parent_name", pa.string()),
+            pa.field("vector", pa.list_(pa.float32(), dim)),
+        ]
+    )
 
 
 class DenseIndex:
@@ -45,6 +49,7 @@ class DenseIndex:
         if self._db is not None:
             return
         import lancedb
+
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._db = lancedb.connect(str(self._data_dir / "vectors"))
 
@@ -61,6 +66,7 @@ class DenseIndex:
             return
         self._open_or_create_table()
         import pyarrow as pa
+
         # Normalize vectors to list[float] before building arrow table
         for r in records:
             v = r.get("vector")
@@ -70,7 +76,9 @@ class DenseIndex:
                 r["vector"] = list(v)
         schema = _schema(self._dim)
         table = pa.Table.from_pylist(records, schema=schema)
-        self._table.merge_insert("id").when_matched_update_all().when_not_matched_insert_all().execute(table)
+        self._table.merge_insert(
+            "id"
+        ).when_matched_update_all().when_not_matched_insert_all().execute(table)
 
     def delete_by_file(self, file_path: str) -> None:
         """Remove all chunks belonging to a file (for incremental re-index)."""

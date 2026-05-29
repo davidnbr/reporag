@@ -15,6 +15,7 @@ PR formulation (research §3):
 This is mathematically equivalent to running standard NetworkX pagerank on the
 *reversed* graph (edges point dependency → dependent).
 """
+
 from __future__ import annotations
 
 import networkx as nx
@@ -66,6 +67,7 @@ def merge_rrf_ppr(
     Combine normalized RRF and PPR scores into a single ranking.
     Both inputs normalized to [0, 1] before merge.
     """
+
     def _normalize(d: dict[str, float]) -> dict[str, float]:
         if not d:
             return d

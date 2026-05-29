@@ -9,6 +9,7 @@ nomic-embed-text requires prefix tokens:
   "search_document: " for corpus texts at index time
   "search_query: "    for query vectors at retrieval time
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -44,10 +45,12 @@ class Embedder:
             return
         try:
             from sentence_transformers import SentenceTransformer
+
             self._st_model = SentenceTransformer(self.model, trust_remote_code=True)
         except Exception:
             # Fall back to MiniLM if nomic fails (e.g., first-time download issue)
             from sentence_transformers import SentenceTransformer
+
             self._st_model = SentenceTransformer(_MINILM_MODEL)
             self._use_nomic_prefix = False
             self._loaded_model = _MINILM_MODEL

@@ -7,6 +7,7 @@ regex-based parsing and use compiler-level linkers."
 Stores all edges in SQLite dependency_graph.db.
 Loads NetworkX DiGraph for PageRank computation.
 """
+
 from __future__ import annotations
 
 import logging
@@ -87,6 +88,7 @@ class GraphDB:
 
     def log_file(self, file_path: str, language: str, graph_source: str) -> None:
         import time
+
         self._conn.execute(
             "INSERT OR REPLACE INTO index_log (file_path, language, graph_source, indexed_at) VALUES (?, ?, ?, ?)",
             (file_path, language, graph_source, time.time()),

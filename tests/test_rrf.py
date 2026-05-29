@@ -1,4 +1,5 @@
 """Unit tests for RRF fusion — verifies research §4 formula."""
+
 from reporag.retrieval.rrf import rrf_fuse, top_k
 
 

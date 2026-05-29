@@ -6,6 +6,7 @@ RRF(d) = Σ_{m ∈ M} 1 / (k + r_m(d))
 k=60 is the standardized constant that smooths the impact of low-ranked outliers.
 Documents sorted descending by RRF score form the final context ordering.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict

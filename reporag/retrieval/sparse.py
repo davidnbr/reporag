@@ -9,6 +9,7 @@ Uses bm25s for fast vectorized BM25. Index persisted as numpy arrays.
 Code-aware tokenization splits snake_case and camelCase so identifiers
 like `rrf_fuse` and `DenseIndex` match their constituent tokens.
 """
+
 from __future__ import annotations
 
 import json
@@ -27,14 +28,14 @@ def _code_tokenize(text: str) -> str:
     # preserve original alongside splits for exact-match recall
     tokens = [text]
     # snake_case split
-    snake_split = re.sub(r'_+', ' ', text)
+    snake_split = re.sub(r"_+", " ", text)
     tokens.append(snake_split)
     # camelCase / PascalCase split
-    camel_split = re.sub(r'([a-z\d])([A-Z])', r'\1 \2', snake_split)
+    camel_split = re.sub(r"([a-z\d])([A-Z])", r"\1 \2", snake_split)
     tokens.append(camel_split)
     # letter-digit boundary
-    tokens.append(re.sub(r'([a-zA-Z])(\d)', r'\1 \2', camel_split))
-    return ' '.join(tokens).lower()
+    tokens.append(re.sub(r"([a-zA-Z])(\d)", r"\1 \2", camel_split))
+    return " ".join(tokens).lower()
 
 
 class BM25Index:

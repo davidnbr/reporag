@@ -8,6 +8,7 @@ Exposes 10 tools via MCP stdio transport:
 Compatible with: agy, Claude Code, Cursor, any MCP client.
 Zero API cost at query time. All computation local.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -40,7 +41,7 @@ class IndexTask:
     skipped_files: int = 0
     graph_edges_scip: int = 0
     graph_edges_heuristic: int = 0
-    status: str = "running"   # running | done | error
+    status: str = "running"  # running | done | error
     error: str | None = None
     finished_at: float | None = None
 
@@ -69,15 +70,14 @@ class _ChangeHandler:
 
     def _enqueue(self, path: str) -> None:
         from reporag.indexer.ast_parser import detect_language
+
         if not detect_language(Path(path)):
             return
         with self._lock:
             self._pending.add(path)
             if self._timer:
                 self._timer.cancel()
-            self._timer = threading.Timer(
-                self._runtime.config.watch_debounce_s, self._flush
-            )
+            self._timer = threading.Timer(self._runtime.config.watch_debounce_s, self._flush)
             self._timer.daemon = True
             self._timer.start()
 
@@ -95,9 +95,7 @@ class _ChangeHandler:
                 projects.add(project)
         for project in projects:
             logger.info("File watcher: triggering incremental reindex for %s", project)
-            asyncio.run_coroutine_threadsafe(
-                self._reindex(project), self._loop
-            )
+            asyncio.run_coroutine_threadsafe(self._reindex(project), self._loop)
 
     def _find_project(self, file_path: str) -> str | None:
         fp = Path(file_path)
@@ -111,6 +109,7 @@ class _ChangeHandler:
 
     async def _reindex(self, project: str) -> None:
         from reporag.tools.index import run as index_run
+
         await index_run({"path": project, "incremental": True}, self._runtime)
 
 
@@ -123,17 +122,17 @@ class Runtime:
     dense: Any = None
     bm25: Any = None
     graph_db: Any = None
-    graph: Any = None      # networkx.DiGraph
+    graph: Any = None  # networkx.DiGraph
     reranker: Any = None
     memory: Any = None
     chunker: Any = None
     # Background indexing
     index_tasks: dict[str, IndexTask] = field(default_factory=dict)
     watched_projects: set[str] = field(default_factory=set)
-    _watcher: Any = None       # watchdog Observer
+    _watcher: Any = None  # watchdog Observer
     _watcher_handlers: dict[str, Any] = field(default_factory=dict)  # project → handler
     _loop: Any = None
-    index_sem: Any = None      # asyncio.Semaphore — prevents concurrent index runs
+    index_sem: Any = None  # asyncio.Semaphore — prevents concurrent index runs
 
     def _data_dir(self) -> Path:
         return Path(self.config.data_dir).expanduser()
@@ -162,7 +161,10 @@ class Runtime:
         self.graph_db = GraphDB(data / "dependency_graph.db")
         self.memory = MemoryStore(data / "memory.db")
         self.chunker = ChunkIndexer(
-            data, self.embedder, self.dense, self.bm25,
+            data,
+            self.embedder,
+            self.dense,
+            self.bm25,
             chunk_strategy=self.config.chunk_strategy,
             chunk_window_lines=self.config.chunk_window_lines,
             chunk_overlap_lines=self.config.chunk_overlap_lines,
@@ -185,7 +187,8 @@ class Runtime:
             self.graph = self.graph_db.load_networkx_graph()
             logger.info(
                 "Graph loaded: %d nodes, %d edges",
-                self.graph.number_of_nodes(), self.graph.number_of_edges(),
+                self.graph.number_of_nodes(),
+                self.graph.number_of_edges(),
             )
 
     def _start_watcher(self, project: str) -> None:
@@ -211,6 +214,7 @@ class Runtime:
     async def _auto_index(self) -> None:
         """Kick off background indexing for all auto_index_paths from config."""
         from reporag.tools.index import run as index_run
+
         for path_str in self.config.auto_index_paths:
             path = Path(path_str).expanduser().resolve()
             if path.exists() and path.is_dir():
@@ -240,9 +244,21 @@ async def list_tools() -> list[types.Tool]:
                 "type": "object",
                 "properties": {
                     "path": {"type": "string", "description": "Absolute path to project root"},
-                    "incremental": {"type": "boolean", "default": True, "description": "Skip unchanged files (mtime + hash check)"},
-                    "languages": {"type": "array", "items": {"type": "string"}, "description": "Restrict to these languages"},
-                    "exclude_patterns": {"type": "array", "items": {"type": "string"}, "description": "Directory names to exclude"},
+                    "incremental": {
+                        "type": "boolean",
+                        "default": True,
+                        "description": "Skip unchanged files (mtime + hash check)",
+                    },
+                    "languages": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Restrict to these languages",
+                    },
+                    "exclude_patterns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Directory names to exclude",
+                    },
                 },
                 "required": ["path"],
             },
@@ -257,7 +273,10 @@ async def list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "task_id": {"type": "string", "description": "Task ID returned by index_codebase. Omit to list all tasks."},
+                    "task_id": {
+                        "type": "string",
+                        "description": "Task ID returned by index_codebase. Omit to list all tasks.",
+                    },
                 },
             },
         ),
@@ -273,9 +292,19 @@ async def list_tools() -> list[types.Tool]:
                 "properties": {
                     "query": {"type": "string", "description": "Natural language or code query"},
                     "k": {"type": "integer", "default": 10, "description": "Number of results"},
-                    "rerank": {"type": "boolean", "description": "Enable cross-encoder reranking (default: rerank_by_default from config, off by default)"},
-                    "languages": {"type": "array", "items": {"type": "string"}, "description": "Filter by language (e.g. ['go', 'python'])"},
-                    "project": {"type": "string", "description": "Restrict results to this absolute project root path"},
+                    "rerank": {
+                        "type": "boolean",
+                        "description": "Enable cross-encoder reranking (default: rerank_by_default from config, off by default)",
+                    },
+                    "languages": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Filter by language (e.g. ['go', 'python'])",
+                    },
+                    "project": {
+                        "type": "string",
+                        "description": "Restrict results to this absolute project root path",
+                    },
                 },
                 "required": ["query"],
             },
@@ -286,9 +315,16 @@ async def list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "name": {"type": "string", "description": "Symbol name (class, function, method)"},
+                    "name": {
+                        "type": "string",
+                        "description": "Symbol name (class, function, method)",
+                    },
                     "language": {"type": "string", "description": "Optional language filter"},
-                    "fuzzy": {"type": "boolean", "default": False, "description": "Use semantic search instead of exact match"},
+                    "fuzzy": {
+                        "type": "boolean",
+                        "default": False,
+                        "description": "Use semantic search instead of exact match",
+                    },
                 },
                 "required": ["name"],
             },
@@ -300,10 +336,21 @@ async def list_tools() -> list[types.Tool]:
                 "type": "object",
                 "properties": {
                     "content": {"type": "string", "description": "Knowledge to store"},
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Searchable tags"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Searchable tags",
+                    },
                     "category": {
                         "type": "string",
-                        "enum": ["decision", "discovery", "pattern", "architecture", "note", "general"],
+                        "enum": [
+                            "decision",
+                            "discovery",
+                            "pattern",
+                            "architecture",
+                            "note",
+                            "general",
+                        ],
                         "default": "general",
                     },
                 },
@@ -317,7 +364,11 @@ async def list_tools() -> list[types.Tool]:
                 "type": "object",
                 "properties": {
                     "query": {"type": "string", "description": "What to search for"},
-                    "tags": {"type": "array", "items": {"type": "string"}, "description": "Filter by tags"},
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Filter by tags",
+                    },
                     "category": {"type": "string", "description": "Filter by category"},
                     "limit": {"type": "integer", "default": 10},
                 },
@@ -377,7 +428,10 @@ async def list_tools() -> list[types.Tool]:
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "Natural language question about the project"},
+                    "query": {
+                        "type": "string",
+                        "description": "Natural language question about the project",
+                    },
                     "project": {"type": "string", "description": "Absolute path to project root"},
                 },
                 "required": ["query", "project"],
@@ -396,6 +450,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             result = await index.run(arguments, _runtime)
         elif name == "index_status":
             from reporag.tools import index_status
+
             result = await index_status.run(arguments, _runtime)
         elif name == "query_code":
             result = await query.run(arguments, _runtime)
@@ -407,15 +462,19 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             result = await mem_tools.run_recall(arguments, _runtime)
         elif name == "summarize_project":
             from reporag.tools import summarize
+
             result = await summarize.run(arguments, _runtime)
         elif name == "get_architecture":
             from reporag.tools import architecture
+
             result = await architecture.run(arguments, _runtime)
         elif name == "project_status":
             from reporag.tools import status
+
             result = await status.run(arguments, _runtime)
         elif name == "ask_project":
             from reporag.tools import ask
+
             result = await ask.run(arguments, _runtime)
         else:
             result = {"error": f"Unknown tool: {name}"}

@@ -1,4 +1,5 @@
 """Unit tests for Reverse Personalized PageRank — verifies research §3."""
+
 import networkx as nx
 from reporag.retrieval.pagerank import merge_rrf_ppr, reverse_personalized_pagerank
 
@@ -62,7 +63,7 @@ def test_reverse_ppr_invalid_seeds_ignored():
 def test_reverse_ppr_top_k_respected():
     G = nx.DiGraph()
     for i in range(20):
-        G.add_edge(f"n{i}", f"n{i+1}")
+        G.add_edge(f"n{i}", f"n{i + 1}")
     scores = reverse_personalized_pagerank(G, seed_nodes=["n0"], top_k=5)
     assert len(scores) <= 5
 

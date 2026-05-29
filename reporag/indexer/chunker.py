@@ -4,6 +4,7 @@ Orchestrates AST parsing → semantic text extraction → embedding → LanceDB 
 This is the main indexing pipeline entry point.
 Supports incremental re-index: skips files unchanged since last index (mtime + hash).
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -106,9 +107,13 @@ class ChunkIndexer:
         for path in to_index:
             try:
                 if self._chunk_strategy == "sliding":
-                    chunks = sliding_window_chunks(path, self._chunk_window_lines, self._chunk_overlap_lines)
+                    chunks = sliding_window_chunks(
+                        path, self._chunk_window_lines, self._chunk_overlap_lines
+                    )
                 elif self._chunk_strategy == "hybrid":
-                    chunks = hybrid_chunks(path, self._chunk_window_lines, self._chunk_overlap_lines)
+                    chunks = hybrid_chunks(
+                        path, self._chunk_window_lines, self._chunk_overlap_lines
+                    )
                 else:
                     chunks = parse_file(path)
                 all_chunks.extend(chunks)
@@ -128,19 +133,21 @@ class ChunkIndexer:
         # Build records for LanceDB
         records: list[dict[str, Any]] = []
         for chunk, text, vec in zip(all_chunks, semantic_texts, embeddings):
-            records.append({
-                "id": chunk.id,
-                "file_path": chunk.file_path,
-                "language": chunk.language,
-                "chunk_type": chunk.chunk_type,
-                "name": chunk.name,
-                "semantic_text": text,
-                "raw_content": chunk.raw_content[:4000],  # cap at 4KB
-                "start_line": chunk.start_line,
-                "end_line": chunk.end_line,
-                "parent_name": chunk.parent_name or "",
-                "vector": vec,
-            })
+            records.append(
+                {
+                    "id": chunk.id,
+                    "file_path": chunk.file_path,
+                    "language": chunk.language,
+                    "chunk_type": chunk.chunk_type,
+                    "name": chunk.name,
+                    "semantic_text": text,
+                    "raw_content": chunk.raw_content[:4000],  # cap at 4KB
+                    "start_line": chunk.start_line,
+                    "end_line": chunk.end_line,
+                    "parent_name": chunk.parent_name or "",
+                    "vector": vec,
+                }
+            )
 
         # Remove stale chunks for re-indexed files before upsert
         for path in to_index:
@@ -193,9 +200,13 @@ class ChunkIndexer:
             for path in batch:
                 try:
                     if self._chunk_strategy == "sliding":
-                        chunks = sliding_window_chunks(path, self._chunk_window_lines, self._chunk_overlap_lines)
+                        chunks = sliding_window_chunks(
+                            path, self._chunk_window_lines, self._chunk_overlap_lines
+                        )
                     elif self._chunk_strategy == "hybrid":
-                        chunks = hybrid_chunks(path, self._chunk_window_lines, self._chunk_overlap_lines)
+                        chunks = hybrid_chunks(
+                            path, self._chunk_window_lines, self._chunk_overlap_lines
+                        )
                     else:
                         chunks = parse_file(path)
                     batch_chunks.extend(chunks)
@@ -230,7 +241,9 @@ class ChunkIndexer:
 
                 file_chunk_counts: dict[str, int] = {}
                 for chunk in batch_chunks:
-                    file_chunk_counts[chunk.file_path] = file_chunk_counts.get(chunk.file_path, 0) + 1
+                    file_chunk_counts[chunk.file_path] = (
+                        file_chunk_counts.get(chunk.file_path, 0) + 1
+                    )
                 for path in batch:
                     self._record_file(path, file_chunk_counts.get(str(path), 0))
 

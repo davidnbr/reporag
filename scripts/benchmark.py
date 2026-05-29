@@ -23,6 +23,7 @@ Usage:
     devenv shell -- python scripts/benchmark.py --project /path/to/project
     devenv shell -- python scripts/benchmark.py --stages dense rrf full
 """
+
 from __future__ import annotations
 
 import argparse
@@ -44,6 +45,7 @@ _CHUNK_TYPES = {"function", "class", "method"}
 
 # ── Runtime ──────────────────────────────────────────────────────────────────
 
+
 def _build_runtime(data_dir: str | None) -> Any:
     from reporag.config import Config, get_config
     from reporag.server import Runtime
@@ -57,14 +59,18 @@ def _build_runtime(data_dir: str | None) -> Any:
 
 
 def _get_named_chunks(
-    runtime: Any, project: str | None, max_samples: int, seed: int,
+    runtime: Any,
+    project: str | None,
+    max_samples: int,
+    seed: int,
     chunk_types: set[str] | None = None,
 ) -> list[dict]:
     runtime.dense._open_or_create_table()
     rows = runtime.dense._table.search().limit(max_samples * 20).to_list()
     types = chunk_types if chunk_types is not None else _CHUNK_TYPES
     named = [
-        r for r in rows
+        r
+        for r in rows
         if r.get("name")
         and r.get("chunk_type") in types
         and (not project or r.get("file_path", "").startswith(project))
@@ -77,6 +83,7 @@ def _get_named_chunks(
 
 
 # ── Pipeline stages ───────────────────────────────────────────────────────────
+
 
 def _stage_dense(rt: Any, q_vec: Any, _query: str, k: int) -> list[str]:
     return rt.dense.search(q_vec, k=k)
@@ -128,7 +135,7 @@ def _stage_full(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
         ppr_scores = reverse_personalized_pagerank(rt.graph, seeds, alpha=0.85, top_k=k * 3)
 
     merged = merge_rrf_ppr(fused, ppr_scores)
-    candidate_ids = list(merged.keys())[:k * 3]
+    candidate_ids = list(merged.keys())[: k * 3]
     candidates = rt.dense.get_chunks(candidate_ids)
 
     if candidates and len(candidates) <= 50:
@@ -138,15 +145,16 @@ def _stage_full(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
 
 
 _STAGES: dict[str, Any] = {
-    "dense":   _stage_dense,
-    "bm25":    _stage_bm25,
-    "rrf":     _stage_rrf,
+    "dense": _stage_dense,
+    "bm25": _stage_bm25,
+    "rrf": _stage_rrf,
     "rrf+ppr": _stage_rrf_ppr,
-    "full":    _stage_full,
+    "full": _stage_full,
 }
 
 
 # ── Metrics ───────────────────────────────────────────────────────────────────
+
 
 def _recall_mrr(pairs: list[tuple[str, list[str]]], k: int) -> tuple[float, float]:
     """(Recall@k, MRR@k) from (gold_id, retrieved_ids) pairs."""
@@ -162,6 +170,7 @@ def _recall_mrr(pairs: list[tuple[str, list[str]]], k: int) -> tuple[float, floa
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Codebrain retrieval quality benchmark")
     parser.add_argument("--k", nargs="+", type=int, default=[5, 10], metavar="K")
@@ -171,9 +180,13 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--stages", nargs="+", choices=list(_STAGES), default=list(_STAGES))
     parser.add_argument("--quiet", action="store_true", help="Suppress progress output")
-    parser.add_argument("--filter-chunk-types", nargs="+", metavar="TYPE",
-                        default=list(_CHUNK_TYPES),
-                        help="Chunk types to include in golden set (default: function class method)")
+    parser.add_argument(
+        "--filter-chunk-types",
+        nargs="+",
+        metavar="TYPE",
+        default=list(_CHUNK_TYPES),
+        help="Chunk types to include in golden set (default: function class method)",
+    )
     args = parser.parse_args()
 
     if not args.quiet:

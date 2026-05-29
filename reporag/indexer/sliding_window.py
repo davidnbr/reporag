@@ -7,6 +7,7 @@ is the empirically best configuration at standard token budgets.
 
 Used in "sliding" and "hybrid" chunk strategies.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -46,16 +47,18 @@ def sliding_window_chunks(
         content = "".join(lines[i:end])
         start_line = i + 1
         end_line = end
-        chunks.append(Chunk(
-            id=Chunk.make_id(str(path), f"__window_{i}__", i),
-            file_path=str(path),
-            language=language,
-            chunk_type="window",
-            name=f"{path.stem}:{start_line}-{end_line}",
-            raw_content=content,
-            start_line=start_line,
-            end_line=end_line,
-        ))
+        chunks.append(
+            Chunk(
+                id=Chunk.make_id(str(path), f"__window_{i}__", i),
+                file_path=str(path),
+                language=language,
+                chunk_type="window",
+                name=f"{path.stem}:{start_line}-{end_line}",
+                raw_content=content,
+                start_line=start_line,
+                end_line=end_line,
+            )
+        )
         if end >= len(lines):
             break
         i += stride
@@ -102,12 +105,16 @@ def hybrid_chunks(
             block_start = ln
         elif not in_gap and block_start is not None:
             gap_chunks.extend(
-                _window_block(lines, block_start, ln - 1, str(path), language, window_lines, overlap_lines)
+                _window_block(
+                    lines, block_start, ln - 1, str(path), language, window_lines, overlap_lines
+                )
             )
             block_start = None
     if block_start is not None:
         gap_chunks.extend(
-            _window_block(lines, block_start, len(lines), str(path), language, window_lines, overlap_lines)
+            _window_block(
+                lines, block_start, len(lines), str(path), language, window_lines, overlap_lines
+            )
         )
 
     return ast_chunks + gap_chunks
@@ -123,7 +130,7 @@ def _window_block(
     overlap_lines: int,
 ) -> list[Chunk]:
     """Emit overlapping windows over [start_line, end_line] (1-based, inclusive)."""
-    block = all_lines[start_line - 1:end_line]
+    block = all_lines[start_line - 1 : end_line]
     if len(block) < 5:
         return []
 
@@ -136,16 +143,18 @@ def _window_block(
         abs_start = start_line + i
         abs_end = start_line + end - 1
         stem = Path(file_path).stem
-        chunks.append(Chunk(
-            id=Chunk.make_id(file_path, f"__gap_{abs_start}__", abs_start),
-            file_path=file_path,
-            language=language,
-            chunk_type="window",
-            name=f"{stem}:{abs_start}-{abs_end}",
-            raw_content=content,
-            start_line=abs_start,
-            end_line=abs_end,
-        ))
+        chunks.append(
+            Chunk(
+                id=Chunk.make_id(file_path, f"__gap_{abs_start}__", abs_start),
+                file_path=file_path,
+                language=language,
+                chunk_type="window",
+                name=f"{stem}:{abs_start}-{abs_end}",
+                raw_content=content,
+                start_line=abs_start,
+                end_line=abs_end,
+            )
+        )
         if end >= len(block):
             break
         i += stride

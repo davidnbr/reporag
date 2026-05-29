@@ -11,6 +11,7 @@ Pipeline (research §3, §4):
   7. Expand        → k-hop subgraph neighbors
   8. Return        → flat ranked list in ONE MCP response
 """
+
 from __future__ import annotations
 
 import logging
@@ -49,11 +50,14 @@ async def run(
     dense_ids = runtime.dense.search(q_vec, k=cfg.dense_candidates)
 
     # ── 2. Sparse retrieval (BM25) ──────────────────────────────────────────
-    sparse_ids = runtime.bm25.search(query, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []
+    sparse_ids = (
+        runtime.bm25.search(query, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []
+    )
 
     # ── 3. RRF fusion (weighted: dense=1.0, sparse=0.5) ─────────────────────
     from reporag.retrieval.rrf import rrf_fuse
     from reporag.retrieval.rrf import top_k as rrf_top_k
+
     fused = rrf_fuse(
         [dense_ids, sparse_ids],
         k=cfg.rrf_k,
@@ -73,12 +77,14 @@ async def run(
     ppr_weight = 0.4 if graph_edge_count >= cfg.min_graph_edges_for_ppr * 5 else 0.2
     if ppr_enabled:
         from reporag.retrieval.pagerank import reverse_personalized_pagerank
+
         ppr_scores = reverse_personalized_pagerank(
             runtime.graph, seed_ids, alpha=cfg.ppr_alpha, top_k=k * 3
         )
 
     # ── 5. Score merge ──────────────────────────────────────────────────────
     from reporag.retrieval.pagerank import merge_rrf_ppr
+
     merged = merge_rrf_ppr(fused, ppr_scores, ppr_weight=ppr_weight)
     candidate_ids = [doc_id for doc_id, _ in list(merged.items())[: k * 3]]
 
@@ -146,16 +152,18 @@ def _format_results(
 ) -> list[dict[str, Any]]:
     out = []
     for chunk in chunks:
-        out.append({
-            "file": chunk.get("file_path", ""),
-            "name": chunk.get("name", ""),
-            "chunk_type": chunk.get("chunk_type", ""),
-            "language": chunk.get("language", ""),
-            "start_line": chunk.get("start_line", 0),
-            "end_line": chunk.get("end_line", 0),
-            "score": round(scores.get(chunk.get("id", ""), 0.0), 4),
-            "rerank_score": round(chunk.get("rerank_score", 0.0), 4),
-            "snippet": chunk.get("semantic_text", "")[:snippet_chars],
-            "neighbors": chunk.get("neighbors", []),
-        })
+        out.append(
+            {
+                "file": chunk.get("file_path", ""),
+                "name": chunk.get("name", ""),
+                "chunk_type": chunk.get("chunk_type", ""),
+                "language": chunk.get("language", ""),
+                "start_line": chunk.get("start_line", 0),
+                "end_line": chunk.get("end_line", 0),
+                "score": round(scores.get(chunk.get("id", ""), 0.0), 4),
+                "rerank_score": round(chunk.get("rerank_score", 0.0), 4),
+                "snippet": chunk.get("semantic_text", "")[:snippet_chars],
+                "neighbors": chunk.get("neighbors", []),
+            }
+        )
     return out

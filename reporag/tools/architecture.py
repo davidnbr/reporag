@@ -1,4 +1,5 @@
 """MCP tool: get_architecture — dependency topology with role classification."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -7,12 +8,12 @@ from typing import Any
 
 def _classify_role(out_deg: int, in_deg: int) -> str:
     if out_deg > 5:
-        return "hub"          # imports many — orchestrator/controller
+        return "hub"  # imports many — orchestrator/controller
     if in_deg > 3 and out_deg <= 2:
-        return "utility"      # imported by many — shared library
+        return "utility"  # imported by many — shared library
     if out_deg >= 2 and in_deg >= 2:
-        return "bridge"       # middle layer
-    return "leaf"             # standalone module
+        return "bridge"  # middle layer
+    return "leaf"  # standalone module
 
 
 async def run(
@@ -44,13 +45,15 @@ async def run(
     for node in project_nodes[:200]:
         out_deg = runtime.graph.out_degree(node)
         in_deg = runtime.graph.in_degree(node)
-        rel = node[len(root):].lstrip("/")
-        nodes.append({
-            "file": rel,
-            "role": _classify_role(out_deg, in_deg),
-            "out_degree": out_deg,
-            "in_degree": in_deg,
-        })
+        rel = node[len(root) :].lstrip("/")
+        nodes.append(
+            {
+                "file": rel,
+                "role": _classify_role(out_deg, in_deg),
+                "out_degree": out_deg,
+                "in_degree": in_deg,
+            }
+        )
 
     nodes.sort(key=lambda n: n["out_degree"] + n["in_degree"], reverse=True)
 
@@ -58,10 +61,12 @@ async def run(
     edges: list[dict[str, str]] = []
     for src, dst in runtime.graph.edges():
         if src.startswith(root) and dst.startswith(root):
-            edges.append({
-                "from": src[len(root):].lstrip("/"),
-                "to": dst[len(root):].lstrip("/"),
-            })
+            edges.append(
+                {
+                    "from": src[len(root) :].lstrip("/"),
+                    "to": dst[len(root) :].lstrip("/"),
+                }
+            )
         if len(edges) >= 100:
             break
 

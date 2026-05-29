@@ -1,4 +1,5 @@
 """Unit tests for AST parser and semantic text extraction."""
+
 import textwrap
 from pathlib import Path
 
@@ -109,10 +110,14 @@ def test_parse_typescript(ts_file: Path):
 
 def test_semantic_text_function():
     chunk = Chunk(
-        id="x", file_path="auth.py", language="python",
-        chunk_type="function", name="create_user",
+        id="x",
+        file_path="auth.py",
+        language="python",
+        chunk_type="function",
+        name="create_user",
         raw_content="def create_user(name: str, email: str) -> dict:\n    pass",
-        start_line=1, end_line=2,
+        start_line=1,
+        end_line=2,
         existing_docstring="Create a new user record.",
     )
     text = chunk_to_semantic_text(chunk)
@@ -122,10 +127,14 @@ def test_semantic_text_function():
 
 def test_semantic_text_class():
     chunk = Chunk(
-        id="y", file_path="service.py", language="python",
-        chunk_type="class", name="UserService",
+        id="y",
+        file_path="service.py",
+        language="python",
+        chunk_type="class",
+        name="UserService",
         raw_content="class UserService(BaseService):\n    pass",
-        start_line=1, end_line=2,
+        start_line=1,
+        end_line=2,
         existing_docstring="Manages user operations.",
     )
     text = chunk_to_semantic_text(chunk)

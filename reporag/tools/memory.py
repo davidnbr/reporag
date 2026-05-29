@@ -1,4 +1,5 @@
 """MCP tools: remember + recall — persistent cross-session knowledge store."""
+
 from __future__ import annotations
 
 from typing import Any

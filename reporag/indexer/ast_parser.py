@@ -1,4 +1,5 @@
 """AST-aware code chunk extraction via tree-sitter — research §1, §2."""
+
 from __future__ import annotations
 
 import hashlib
@@ -131,11 +132,16 @@ def _get_node_name(node: tree_sitter.Node, language: str, src: bytes) -> str:
         if child:
             # For C/C++ declarators, recurse one level
             inner = child.child_by_field_name("declarator") or child
-            return src[inner.start_byte:inner.end_byte].decode("utf-8", errors="replace").strip()
+            return src[inner.start_byte : inner.end_byte].decode("utf-8", errors="replace").strip()
     # Fallback: first named child that looks like an identifier
     for child in node.children:
-        if child.type in ("identifier", "type_identifier", "field_identifier", "property_identifier"):
-            return src[child.start_byte:child.end_byte].decode("utf-8", errors="replace").strip()
+        if child.type in (
+            "identifier",
+            "type_identifier",
+            "field_identifier",
+            "property_identifier",
+        ):
+            return src[child.start_byte : child.end_byte].decode("utf-8", errors="replace").strip()
     return "<anonymous>"
 
 
@@ -148,10 +154,15 @@ def _extract_docstring(node: tree_sitter.Node, language: str, src: bytes) -> str
         if child.type in ("expression_statement", "block"):
             for sub in child.children:
                 if sub.type in ("string", "raw_string_literal"):
-                    text = src[sub.start_byte:sub.end_byte].decode("utf-8", errors="replace")
-                    return text.strip('"\' \n\t').strip()
+                    text = src[sub.start_byte : sub.end_byte].decode("utf-8", errors="replace")
+                    return text.strip("\"' \n\t").strip()
         if child.type == "comment":
-            return src[child.start_byte:child.end_byte].decode("utf-8", errors="replace").lstrip("/# ").strip()
+            return (
+                src[child.start_byte : child.end_byte]
+                .decode("utf-8", errors="replace")
+                .lstrip("/# ")
+                .strip()
+            )
     return None
 
 
@@ -168,7 +179,7 @@ def _walk_extract(
 
     if chunk_type:
         name = _get_node_name(node, language, src)
-        raw = src[node.start_byte:node.end_byte].decode("utf-8", errors="replace")
+        raw = src[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
         docstring = _extract_docstring(node, language, src)
         chunk_id = Chunk.make_id(file_path, name, node.start_point[0])
         chunks.append(
@@ -203,30 +214,39 @@ def _make_parser(language: str):  # type: ignore[return]
     try:
         if language == "python":
             import tree_sitter_python as mod
+
             lang_obj = Language(mod.language())
         elif language == "javascript":
             import tree_sitter_javascript as mod  # type: ignore[no-redef]
+
             lang_obj = Language(mod.language())
         elif language == "typescript":
             import tree_sitter_typescript as mod  # type: ignore[no-redef]
+
             lang_obj = Language(mod.language_typescript())
         elif language == "tsx":
             import tree_sitter_typescript as mod  # type: ignore[no-redef]
+
             lang_obj = Language(mod.language_tsx())
         elif language == "go":
             import tree_sitter_go as mod  # type: ignore[no-redef]
+
             lang_obj = Language(mod.language())
         elif language == "rust":
             import tree_sitter_rust as mod  # type: ignore[no-redef]
+
             lang_obj = Language(mod.language())
         elif language == "java":
             import tree_sitter_java as mod  # type: ignore[no-redef]
+
             lang_obj = Language(mod.language())
         elif language == "c":
             import tree_sitter_c as mod  # type: ignore[no-redef]
+
             lang_obj = Language(mod.language())
         elif language == "cpp":
             import tree_sitter_cpp as mod  # type: ignore[no-redef]
+
             lang_obj = Language(mod.language())
         else:
             return None

@@ -5,6 +5,7 @@ Used when SCIP CLI is not installed for a language. Accuracy ~70% vs SCIP ~99%.
 Resolves import statements to file paths using project-relative heuristics.
 All edges logged as 'heuristic' source so callers can report coverage.
 """
+
 from __future__ import annotations
 
 import logging

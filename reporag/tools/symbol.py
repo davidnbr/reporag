@@ -1,4 +1,5 @@
 """MCP tool: get_symbol — exact symbol lookup via SQLite graph DB."""
+
 from __future__ import annotations
 
 from typing import Any

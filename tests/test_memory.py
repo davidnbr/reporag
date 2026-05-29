@@ -1,4 +1,5 @@
 """Unit tests for MemoryStore — verifies persistence and FTS5 recall."""
+
 from pathlib import Path
 
 import pytest
@@ -17,7 +18,9 @@ def test_remember_returns_id(store: MemoryStore):
 
 
 def test_remember_and_recall(store: MemoryStore):
-    store.remember("decided to use RRF k=60 for fusion", tags=["rrf", "retrieval"], category="decision")
+    store.remember(
+        "decided to use RRF k=60 for fusion", tags=["rrf", "retrieval"], category="decision"
+    )
     results = store.recall("RRF fusion")
     assert len(results) > 0
     assert "RRF" in results[0]["content"] or "rrf" in results[0]["content"].lower()

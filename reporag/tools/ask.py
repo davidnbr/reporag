@@ -1,22 +1,57 @@
 """MCP tool: ask_project — natural language routing to project intelligence tools."""
+
 from __future__ import annotations
 
 from typing import Any
 
 _ROUTES: list[tuple[list[str], str]] = [
     (
-        ["what does", "what is this", "purpose", "overview", "summary", "about",
-         "describe", "tell me about", "what kind", "what type"],
+        [
+            "what does",
+            "what is this",
+            "purpose",
+            "overview",
+            "summary",
+            "about",
+            "describe",
+            "tell me about",
+            "what kind",
+            "what type",
+        ],
         "summarize",
     ),
     (
-        ["architecture", "structure", "organized", "how is it", "layers", "modules",
-         "design", "dependency", "dependencies", "components", "layout"],
+        [
+            "architecture",
+            "structure",
+            "organized",
+            "how is it",
+            "layers",
+            "modules",
+            "design",
+            "dependency",
+            "dependencies",
+            "components",
+            "layout",
+        ],
         "architecture",
     ),
     (
-        ["todo", "status", "what's left", "what is left", "implemented", "progress",
-         "where are we", "stubs", "health", "fixme", "remaining", "done", "complete"],
+        [
+            "todo",
+            "status",
+            "what's left",
+            "what is left",
+            "implemented",
+            "progress",
+            "where are we",
+            "stubs",
+            "health",
+            "fixme",
+            "remaining",
+            "done",
+            "complete",
+        ],
         "status",
     ),
 ]
@@ -42,24 +77,28 @@ async def run(
 
     if best_tool == "summarize":
         from reporag.tools import summarize
+
         result = await summarize.run({"project": project}, runtime)
         result["source_tool"] = "summarize_project"
         return result
 
     if best_tool == "architecture":
         from reporag.tools import architecture
+
         result = await architecture.run({"project": project}, runtime)
         result["source_tool"] = "get_architecture"
         return result
 
     if best_tool == "status":
         from reporag.tools import status
+
         result = await status.run({"project": project}, runtime)
         result["source_tool"] = "project_status"
         return result
 
     # Fallback: semantic code search
     from reporag.tools import query as query_tool
+
     result = await query_tool.run({"query": raw_query, "project": project, "k": 10}, runtime)
     result["source_tool"] = "query_code"
     return result

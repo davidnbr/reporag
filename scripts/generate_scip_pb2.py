@@ -5,6 +5,7 @@ Regenerate reporag/indexer/scip_pb2.py from the official Sourcegraph SCIP proto.
 Run when the SCIP protocol version changes:
     python scripts/generate_scip_pb2.py
 """
+
 import subprocess
 import sys
 import tempfile
@@ -27,7 +28,9 @@ def main() -> None:
         print("Generating scip_pb2.py via grpcio-tools ...")
         result = subprocess.run(
             [
-                sys.executable, "-m", "grpc_tools.protoc",
+                sys.executable,
+                "-m",
+                "grpc_tools.protoc",
                 f"--proto_path={tmp}",
                 f"--python_out={OUT_FILE.parent}",
                 str(proto_path),

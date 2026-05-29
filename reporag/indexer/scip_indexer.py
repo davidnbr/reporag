@@ -14,6 +14,7 @@ SCIP CLIs (install once per language):
 
 Output: .scip protobuf file → parsed to exact (src_file, dst_file, edge_type) edges.
 """
+
 from __future__ import annotations
 
 import logging
@@ -110,19 +111,23 @@ def _parse_scip_output(scip_path: Path, root: Path) -> list[SCIPEdge]:
     except (ImportError, AttributeError):
         try:
             import scip_pb2  # type: ignore[import]  # noqa: PLC0415
+
             Index = scip_pb2.Index
         except ImportError:
             try:
                 import importlib
 
                 from google.protobuf import descriptor_pb2 as _  # noqa: F401, PLC0415
+
                 scip_mod = importlib.import_module("scip.scip_pb2")
                 Index = scip_mod.Index
             except (ImportError, AttributeError):
                 pass
 
     if Index is None:
-        logger.warning("'scip' Python package not installed or incompatible. Run: pip install reporag")
+        logger.warning(
+            "'scip' Python package not installed or incompatible. Run: pip install reporag"
+        )
         return []
 
     try:
@@ -152,14 +157,16 @@ def _parse_scip_output(scip_path: Path, root: Path) -> list[SCIPEdge]:
             if not (occurrence.symbol_roles & 1):  # REFERENCE (not definition)
                 dst_loc = symbol_defs.get(occurrence.symbol)
                 if dst_loc and dst_loc[0] != abs_path:  # cross-file reference
-                    edges.append(SCIPEdge(
-                        src_symbol=f"{rel_path}::{occurrence.range[0] + 1}",
-                        src_file=abs_path,
-                        src_line=occurrence.range[0] + 1,
-                        dst_symbol=occurrence.symbol,
-                        dst_file=dst_loc[0],
-                        dst_line=dst_loc[1],
-                        edge_type="reference",
-                    ))
+                    edges.append(
+                        SCIPEdge(
+                            src_symbol=f"{rel_path}::{occurrence.range[0] + 1}",
+                            src_file=abs_path,
+                            src_line=occurrence.range[0] + 1,
+                            dst_symbol=occurrence.symbol,
+                            dst_file=dst_loc[0],
+                            dst_line=dst_loc[1],
+                            edge_type="reference",
+                        )
+                    )
 
     return edges

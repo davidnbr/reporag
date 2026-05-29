@@ -8,6 +8,7 @@ Skipped automatically if no data exists.
 Run:
     devenv shell -- pytest tests/test_project_intelligence.py -m integration -v
 """
+
 from __future__ import annotations
 
 import sys
@@ -24,6 +25,7 @@ _PROJECT = str(Path(__file__).parent.parent.resolve())
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
+
 
 @pytest.fixture(scope="module")
 def runtime() -> Any:
@@ -53,20 +55,30 @@ def runtime() -> Any:
 
 # ── summarize_project ─────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_summarize_returns_required_keys(runtime: Any) -> None:
     from reporag.tools import summarize
+
     result = await summarize.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result, f"summarize failed: {result['error']}"
-    for key in ("description", "tech_stack", "entry_points", "components", "public_api",
-                "chunk_count", "indexed_files"):
+    for key in (
+        "description",
+        "tech_stack",
+        "entry_points",
+        "components",
+        "public_api",
+        "chunk_count",
+        "indexed_files",
+    ):
         assert key in result, f"missing key: {key}"
 
 
 @pytest.mark.asyncio
 async def test_summarize_detects_python(runtime: Any) -> None:
     from reporag.tools import summarize
+
     result = await summarize.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -77,6 +89,7 @@ async def test_summarize_detects_python(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_summarize_finds_server_entry_point(runtime: Any) -> None:
     from reporag.tools import summarize
+
     result = await summarize.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -89,6 +102,7 @@ async def test_summarize_finds_server_entry_point(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_summarize_has_public_api(runtime: Any) -> None:
     from reporag.tools import summarize
+
     result = await summarize.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -100,6 +114,7 @@ async def test_summarize_has_public_api(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_summarize_missing_project_returns_error(runtime: Any) -> None:
     from reporag.tools import summarize
+
     result = await summarize.run({"project": ""}, runtime)
     assert "error" in result
 
@@ -107,15 +122,18 @@ async def test_summarize_missing_project_returns_error(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_summarize_nonexistent_project_returns_error(runtime: Any) -> None:
     from reporag.tools import summarize
+
     result = await summarize.run({"project": "/tmp/nonexistent_project_xyzzy"}, runtime)
     assert "error" in result
 
 
 # ── get_architecture ──────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_architecture_returns_required_keys(runtime: Any) -> None:
     from reporag.tools import architecture
+
     result = await architecture.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result, f"architecture failed: {result.get('error')}"
@@ -126,6 +144,7 @@ async def test_architecture_returns_required_keys(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_architecture_nodes_have_required_fields(runtime: Any) -> None:
     from reporag.tools import architecture
+
     result = await architecture.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -133,14 +152,13 @@ async def test_architecture_nodes_have_required_fields(runtime: Any) -> None:
     for node in result["nodes"][:5]:
         for field in ("file", "role", "out_degree", "in_degree"):
             assert field in node, f"Node missing field '{field}': {node}"
-        assert node["role"] in ("hub", "utility", "bridge", "leaf"), (
-            f"Unknown role: {node['role']}"
-        )
+        assert node["role"] in ("hub", "utility", "bridge", "leaf"), f"Unknown role: {node['role']}"
 
 
 @pytest.mark.asyncio
 async def test_architecture_layers_contain_reporag(runtime: Any) -> None:
     from reporag.tools import architecture
+
     result = await architecture.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -152,6 +170,7 @@ async def test_architecture_layers_contain_reporag(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_architecture_missing_project_returns_error(runtime: Any) -> None:
     from reporag.tools import architecture
+
     result = await architecture.run({"project": ""}, runtime)
     assert "error" in result
 
@@ -159,6 +178,7 @@ async def test_architecture_missing_project_returns_error(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_architecture_counts_match_lists(runtime: Any) -> None:
     from reporag.tools import architecture
+
     result = await architecture.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -168,20 +188,31 @@ async def test_architecture_counts_match_lists(runtime: Any) -> None:
 
 # ── project_status ────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_status_returns_required_keys(runtime: Any) -> None:
     from reporag.tools import status
+
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result, f"status failed: {result.get('error')}"
-    for key in ("health", "todos", "todo_count", "stubs", "stub_count",
-                "test_coverage", "git", "chunk_count"):
+    for key in (
+        "health",
+        "todos",
+        "todo_count",
+        "stubs",
+        "stub_count",
+        "test_coverage",
+        "git",
+        "chunk_count",
+    ):
         assert key in result, f"missing key: {key}"
 
 
 @pytest.mark.asyncio
 async def test_status_health_is_valid(runtime: Any) -> None:
     from reporag.tools import status
+
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -193,6 +224,7 @@ async def test_status_health_is_valid(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_status_todo_counts_match(runtime: Any) -> None:
     from reporag.tools import status
+
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -207,6 +239,7 @@ async def test_status_todo_counts_match(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_status_test_coverage_ratio(runtime: Any) -> None:
     from reporag.tools import status
+
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -219,6 +252,7 @@ async def test_status_test_coverage_ratio(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_status_git_info_present(runtime: Any) -> None:
     from reporag.tools import status
+
     result = await status.run({"project": _PROJECT}, runtime)
 
     assert "error" not in result
@@ -233,15 +267,18 @@ async def test_status_git_info_present(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_status_missing_project_returns_error(runtime: Any) -> None:
     from reporag.tools import status
+
     result = await status.run({"project": ""}, runtime)
     assert "error" in result
 
 
 # ── ask_project ───────────────────────────────────────────────────────────────
 
+
 @pytest.mark.asyncio
 async def test_ask_routes_to_summarize(runtime: Any) -> None:
     from reporag.tools import ask
+
     for query in ("what does this project do", "give me an overview", "describe this codebase"):
         result = await ask.run({"query": query, "project": _PROJECT}, runtime)
         assert "error" not in result, f"ask failed for '{query}': {result.get('error')}"
@@ -253,6 +290,7 @@ async def test_ask_routes_to_summarize(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_ask_routes_to_architecture(runtime: Any) -> None:
     from reporag.tools import ask
+
     for query in ("show the architecture", "how is the code structured", "what are the layers"):
         result = await ask.run({"query": query, "project": _PROJECT}, runtime)
         assert "error" not in result
@@ -264,6 +302,7 @@ async def test_ask_routes_to_architecture(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_ask_routes_to_status(runtime: Any) -> None:
     from reporag.tools import ask
+
     for query in ("what's the project status", "any todos left", "show stubs and fixmes"):
         result = await ask.run({"query": query, "project": _PROJECT}, runtime)
         assert "error" not in result
@@ -275,6 +314,7 @@ async def test_ask_routes_to_status(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_ask_falls_back_to_query(runtime: Any) -> None:
     from reporag.tools import ask
+
     result = await ask.run({"query": "how does RRF fusion work", "project": _PROJECT}, runtime)
     assert "error" not in result
     assert result.get("source_tool") == "query_code", (
@@ -287,6 +327,7 @@ async def test_ask_falls_back_to_query(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_ask_missing_query_returns_error(runtime: Any) -> None:
     from reporag.tools import ask
+
     result = await ask.run({"query": "", "project": _PROJECT}, runtime)
     assert "error" in result
 
@@ -294,5 +335,6 @@ async def test_ask_missing_query_returns_error(runtime: Any) -> None:
 @pytest.mark.asyncio
 async def test_ask_result_includes_source_tool(runtime: Any) -> None:
     from reporag.tools import ask
+
     result = await ask.run({"query": "what is this", "project": _PROJECT}, runtime)
     assert "source_tool" in result, "ask_project must always set source_tool"

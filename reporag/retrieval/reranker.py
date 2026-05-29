@@ -5,6 +5,7 @@ Model: cross-encoder/ms-marco-MiniLM-L-6-v2 (MIT, ~84MB, local-only)
 Only activated when len(candidates) <= reranker_k (default 15) — precision over speed.
 Lazy-loaded on first use to avoid startup delay.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -23,6 +24,7 @@ class CrossEncoderReranker:
         if self._model is not None:
             return
         from sentence_transformers import CrossEncoder
+
         self._model = CrossEncoder(self.model_name)
 
     def _cache_key(self, query: str, chunks: list[dict[str, Any]]) -> str:

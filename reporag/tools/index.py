@@ -3,6 +3,7 @@
 Returns immediately with a task_id. Indexing runs in background; first batch
 of results is queryable within seconds. Use index_status to track progress.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -15,26 +16,58 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 _EXCLUDE_DEFAULTS = {
-    "node_modules", ".git", "__pycache__", ".venv", "venv", "env",
-    "dist", "build", ".mypy_cache", ".ruff_cache", "target", ".codebrain", ".reporag",
-    ".devenv", ".direnv", "vendor", "pkg", ".cache",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "env",
+    "dist",
+    "build",
+    ".mypy_cache",
+    ".ruff_cache",
+    "target",
+    ".codebrain",
+    ".reporag",
+    ".devenv",
+    ".direnv",
+    "vendor",
+    "pkg",
+    ".cache",
 }
 
 # Files indexed first — LLMs ask about entry points immediately
 _ENTRY_POINTS = {
-    "main.py", "app.py", "server.py", "__init__.py", "cli.py", "wsgi.py", "asgi.py",
-    "main.ts", "index.ts", "app.ts", "server.ts", "index.js", "main.js",
+    "main.py",
+    "app.py",
+    "server.py",
+    "__init__.py",
+    "cli.py",
+    "wsgi.py",
+    "asgi.py",
+    "main.ts",
+    "index.ts",
+    "app.ts",
+    "server.ts",
+    "index.js",
+    "main.js",
     "main.go",
-    "main.rs", "lib.rs", "mod.rs",
-    "Main.java", "Application.java",
-    "main.c", "main.cpp",
+    "main.rs",
+    "lib.rs",
+    "mod.rs",
+    "Main.java",
+    "Application.java",
+    "main.c",
+    "main.cpp",
 }
 
 
 def _priority_sort(files: list[Path]) -> list[Path]:
     """Entry points first, then most-recently-modified first."""
+
     def score(f: Path) -> tuple:
         return (0 if f.name in _ENTRY_POINTS else 1, -f.stat().st_mtime)
+
     return sorted(files, key=score)
 
 
@@ -49,6 +82,7 @@ async def _run_index_bg(
     task = runtime.index_tasks[task_id]
     try:
         async with runtime.index_sem:
+
             def on_batch(files_done: int, chunks_done: int, skipped: int) -> None:
                 task.indexed_files = files_done
                 task.indexed_chunks = chunks_done
@@ -62,6 +96,7 @@ async def _run_index_bg(
             )
 
             from reporag.indexer.graph_builder import build_graph_for_project
+
             loop = asyncio.get_event_loop()
             graph_stats = await loop.run_in_executor(
                 None, build_graph_for_project, root, files, runtime.graph_db
@@ -79,7 +114,9 @@ async def _run_index_bg(
             task.finished_at = time.monotonic()
             logger.info(
                 "Index task %s done: %d files, %d chunks (%.1fs)",
-                task_id, task.indexed_files, task.indexed_chunks,
+                task_id,
+                task.indexed_files,
+                task.indexed_chunks,
                 task.finished_at - task.started_at,
             )
     except Exception as exc:
@@ -117,7 +154,9 @@ async def run(
 
     if not files:
         return {
-            "indexed_files": 0, "chunks": 0, "graph_edges": 0,
+            "indexed_files": 0,
+            "chunks": 0,
+            "graph_edges": 0,
             "message": "No supported source files found.",
         }
 
@@ -125,6 +164,7 @@ async def run(
 
     task_id = uuid.uuid4().hex[:12]
     from reporag.server import IndexTask
+
     task = IndexTask(
         task_id=task_id,
         project=str(root),

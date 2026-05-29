@@ -5,6 +5,7 @@ Goal: project code latent space → NL query space (manifold alignment).
 Greptile proof: embedding docstrings >> embedding raw code for MIPS precision.
 No LLM required. Optional Ollama path for richer text.
 """
+
 from __future__ import annotations
 
 import re
@@ -74,7 +75,11 @@ def chunk_to_semantic_text(chunk: Chunk) -> str:
         ).strip()
 
     if chunk.chunk_type == "function":
-        params = _extract_params_python(raw) if chunk.language == "python" else _extract_params_generic(raw)
+        params = (
+            _extract_params_python(raw)
+            if chunk.language == "python"
+            else _extract_params_generic(raw)
+        )
         ret = _extract_return_type(raw)
         parent = f" in {chunk.parent_name}" if chunk.parent_name else ""
         return (
@@ -85,7 +90,11 @@ def chunk_to_semantic_text(chunk: Chunk) -> str:
         ).strip()
 
     if chunk.chunk_type == "method":
-        params = _extract_params_python(raw) if chunk.language == "python" else _extract_params_generic(raw)
+        params = (
+            _extract_params_python(raw)
+            if chunk.language == "python"
+            else _extract_params_generic(raw)
+        )
         ret = _extract_return_type(raw)
         cls = chunk.parent_name or "unknown class"
         return (
@@ -98,16 +107,11 @@ def chunk_to_semantic_text(chunk: Chunk) -> str:
     if chunk.chunk_type == "class":
         bases = _extract_bases(raw, chunk.language)
         return (
-            f"Class {name_readable}. "
-            f"{('Extends: ' + bases + '.') if bases else ''} "
-            f"{doc}"
+            f"Class {name_readable}. {('Extends: ' + bases + '.') if bases else ''} {doc}"
         ).strip()
 
     if chunk.chunk_type == "interface":
-        return (
-            f"Interface {name_readable}. "
-            f"{doc}"
-        ).strip()
+        return (f"Interface {name_readable}. {doc}").strip()
 
     if chunk.chunk_type == "window":
         # Sliding window chunk — raw code content for BM25/dense code matching
