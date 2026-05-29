@@ -97,7 +97,7 @@ MCP clients then launch the server automatically via `uvx`. No manual install st
       "command": "uvx",
       "args": [
         "--from",
-        "reporag[ml] @ git+https://github.com/davidnbr/codebrain.git",
+        "reporag[ml] @ git+https://github.com/davidnbr/reporag.git",
         "reporag"
       ],
       "env": {
@@ -117,7 +117,7 @@ Same format as above.
 ```json
 {
   "command": "uvx",
-  "args": ["--from", "reporag[ml] @ git+https://github.com/davidnbr/codebrain.git", "reporag"],
+  "args": ["--from", "reporag[ml] @ git+https://github.com/davidnbr/reporag.git", "reporag"],
   "env": { "REPORAG_DATA_DIR": "~/.local/share/reporag" }
 }
 ```
