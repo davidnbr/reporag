@@ -11,7 +11,7 @@ import re
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from codebrain.indexer.ast_parser import Chunk
+    from reporag.indexer.ast_parser import Chunk
 
 
 def _clean(text: str | None) -> str:

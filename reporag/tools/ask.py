@@ -41,25 +41,25 @@ async def run(
             break
 
     if best_tool == "summarize":
-        from codebrain.tools import summarize
+        from reporag.tools import summarize
         result = await summarize.run({"project": project}, runtime)
         result["source_tool"] = "summarize_project"
         return result
 
     if best_tool == "architecture":
-        from codebrain.tools import architecture
+        from reporag.tools import architecture
         result = await architecture.run({"project": project}, runtime)
         result["source_tool"] = "get_architecture"
         return result
 
     if best_tool == "status":
-        from codebrain.tools import status
+        from reporag.tools import status
         result = await status.run({"project": project}, runtime)
         result["source_tool"] = "project_status"
         return result
 
     # Fallback: semantic code search
-    from codebrain.tools import query as query_tool
+    from reporag.tools import query as query_tool
     result = await query_tool.run({"query": raw_query, "project": project, "k": 10}, runtime)
     result["source_tool"] = "query_code"
     return result

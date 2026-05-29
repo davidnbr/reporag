@@ -1,4 +1,4 @@
-# codebrain — Local RAG MCP Server
+# reporag — Local RAG MCP Server
 
 Fully local, zero-cost RAG knowledge layer for AI coding tools.
 No SaaS. No pricing tiers. All computation on your machine.
@@ -11,7 +11,7 @@ Works with **agy (antigravity)**, **Claude Code**, **Cursor**, and any MCP-compa
 AI tool (agy / Claude Code / Cursor)
        │
        ▼ MCP stdio
-codebrain MCP server
+reporag MCP server
        ├── tree-sitter  → AST chunks + semantic text (per-language)
        ├── SCIP CLIs    → compiler-grade dependency graph (+ heuristic fallback)
        ├── LanceDB      → dense vector search (nomic-embed-text-v1, 768-dim, local)
@@ -28,7 +28,7 @@ Synthetic golden set: named functions/classes sampled from the live index.
 Query template: `"implementation of {name}"` / `"how does {name} work"`.
 Metric: fraction of queries where the exact chunk appears in top-k (Recall@k), plus MRR@k.
 
-### codebrain (small, 246 chunks, AST strategy)
+### reporag (small, 246 chunks, AST strategy)
 
 | Stage      | Recall@5 | Recall@10 | MRR@10 | ms/query |
 |------------|----------|-----------|--------|----------|
@@ -101,7 +101,7 @@ MCP clients then launch the server automatically via `uvx`. No manual install st
         "reporag"
       ],
       "env": {
-        "CODEBRAIN_DATA_DIR": "~/.local/share/codebrain"
+        "REPORAG_DATA_DIR": "~/.local/share/reporag"
       }
     }
   }
@@ -118,7 +118,7 @@ Same format as above.
 {
   "command": "uvx",
   "args": ["--from", "reporag[ml] @ git+https://github.com/davidnbr/codebrain.git", "reporag"],
-  "env": { "CODEBRAIN_DATA_DIR": "~/.local/share/codebrain" }
+  "env": { "REPORAG_DATA_DIR": "~/.local/share/reporag" }
 }
 ```
 
@@ -157,13 +157,13 @@ Persistent knowledge store across sessions.
 
 ## Configuration
 
-Config file: `~/.config/codebrain/config.json` (optional — all fields have defaults)
+Config file: `~/.config/reporag/config.json` (optional — all fields have defaults)
 
 ```json
 {
   "embed_model": "nomic-ai/nomic-embed-text-v1",
   "embed_backend": "sentence-transformers",
-  "data_dir": "~/.local/share/codebrain",
+  "data_dir": "~/.local/share/reporag",
   "reranker_model": "BAAI/bge-reranker-base",
   "reranker_k": 50,
   "rerank_by_default": false,
@@ -189,25 +189,25 @@ Config file: `~/.config/codebrain/config.json` (optional — all fields have def
 
 | Variable | Field |
 |----------|-------|
-| `CODEBRAIN_DATA_DIR` | `data_dir` |
-| `CODEBRAIN_EMBED_MODEL` | `embed_model` |
-| `CODEBRAIN_EMBED_BACKEND` | `embed_backend` |
-| `CODEBRAIN_RERANKER_K` | `reranker_k` |
-| `CODEBRAIN_RERANK_BY_DEFAULT` | `rerank_by_default` |
-| `CODEBRAIN_CHUNK_STRATEGY` | `chunk_strategy` |
-| `CODEBRAIN_CHUNK_WINDOW_LINES` | `chunk_window_lines` |
-| `CODEBRAIN_CHUNK_OVERLAP_LINES` | `chunk_overlap_lines` |
-| `CODEBRAIN_BM25_K1` | `bm25_k1` |
-| `CODEBRAIN_BM25_B` | `bm25_b` |
-| `CODEBRAIN_RRF_K` | `rrf_k` |
-| `CODEBRAIN_PPR_ALPHA` | `ppr_alpha` |
-| `CODEBRAIN_DENSE_CANDIDATES` | `dense_candidates` |
-| `CODEBRAIN_SPARSE_CANDIDATES` | `sparse_candidates` |
-| `CODEBRAIN_SNIPPET_CHARS` | `snippet_chars` |
+| `REPORAG_DATA_DIR` | `data_dir` |
+| `REPORAG_EMBED_MODEL` | `embed_model` |
+| `REPORAG_EMBED_BACKEND` | `embed_backend` |
+| `REPORAG_RERANKER_K` | `reranker_k` |
+| `REPORAG_RERANK_BY_DEFAULT` | `rerank_by_default` |
+| `REPORAG_CHUNK_STRATEGY` | `chunk_strategy` |
+| `REPORAG_CHUNK_WINDOW_LINES` | `chunk_window_lines` |
+| `REPORAG_CHUNK_OVERLAP_LINES` | `chunk_overlap_lines` |
+| `REPORAG_BM25_K1` | `bm25_k1` |
+| `REPORAG_BM25_B` | `bm25_b` |
+| `REPORAG_RRF_K` | `rrf_k` |
+| `REPORAG_PPR_ALPHA` | `ppr_alpha` |
+| `REPORAG_DENSE_CANDIDATES` | `dense_candidates` |
+| `REPORAG_SPARSE_CANDIDATES` | `sparse_candidates` |
+| `REPORAG_SNIPPET_CHARS` | `snippet_chars` |
 
 ## Optional: SCIP CLIs (compiler-grade dependency graph)
 
-Without these, codebrain uses tree-sitter import heuristics (~70% graph accuracy).
+Without these, reporag uses tree-sitter import heuristics (~70% graph accuracy).
 
 ```bash
 pip install scip-python                              # Python
@@ -218,8 +218,8 @@ go install github.com/sourcegraph/scip-go/cmd/scip-go@latest  # Go
 ## Development
 
 ```bash
-git clone https://github.com/davidnbr/codebrain
-cd codebrain
+git clone https://github.com/davidnbr/reporag
+cd reporag
 devenv shell   # Nix-based reproducible env (requires devenv)
 # or:
 uv sync --extra dev

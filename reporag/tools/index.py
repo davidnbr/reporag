@@ -61,7 +61,7 @@ async def _run_index_bg(
                 on_batch=on_batch,
             )
 
-            from codebrain.indexer.graph_builder import build_graph_for_project
+            from reporag.indexer.graph_builder import build_graph_for_project
             loop = asyncio.get_event_loop()
             graph_stats = await loop.run_in_executor(
                 None, build_graph_for_project, root, files, runtime.graph_db
@@ -106,7 +106,7 @@ async def run(
     extra_excludes: list[str] = arguments.get("exclude_patterns", [])
     exclude = _EXCLUDE_DEFAULTS | set(extra_excludes)
 
-    from codebrain.indexer.ast_parser import detect_language
+    from reporag.indexer.ast_parser import detect_language
 
     files: list[Path] = []
     for f in root.rglob("*"):
@@ -124,7 +124,7 @@ async def run(
     files = _priority_sort(files)
 
     task_id = uuid.uuid4().hex[:12]
-    from codebrain.server import IndexTask
+    from reporag.server import IndexTask
     task = IndexTask(
         task_id=task_id,
         project=str(root),

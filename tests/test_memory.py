@@ -2,7 +2,7 @@
 from pathlib import Path
 
 import pytest
-from codebrain.memory.store import MemoryStore
+from reporag.memory.store import MemoryStore
 
 
 @pytest.fixture()

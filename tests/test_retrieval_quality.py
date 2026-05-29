@@ -33,10 +33,10 @@ _SEED = 42
 @pytest.fixture(scope="module")
 def runtime() -> Any:
     try:
-        from codebrain.config import get_config
-        from codebrain.server import Runtime
+        from reporag.config import get_config
+        from reporag.server import Runtime
     except ImportError as e:
-        pytest.skip(f"codebrain not importable: {e}")
+        pytest.skip(f"reporag not importable: {e}")
 
     try:
         import lancedb  # noqa: F401
@@ -81,7 +81,7 @@ def _top_ids_dense(rt: Any, q_vec: Any, k: int) -> list[str]:
 
 
 def _top_ids_rrf(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
-    from codebrain.retrieval.rrf import rrf_fuse, top_k
+    from reporag.retrieval.rrf import rrf_fuse, top_k
 
     dense_ids = rt.dense.search(q_vec, k=50)
     sparse_ids = rt.bm25.search(query, k=50) if rt.bm25.is_ready else []
@@ -90,8 +90,8 @@ def _top_ids_rrf(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
 
 
 def _top_ids_full(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
-    from codebrain.retrieval.pagerank import merge_rrf_ppr, reverse_personalized_pagerank
-    from codebrain.retrieval.rrf import rrf_fuse, top_k
+    from reporag.retrieval.pagerank import merge_rrf_ppr, reverse_personalized_pagerank
+    from reporag.retrieval.rrf import rrf_fuse, top_k
 
     dense_ids = rt.dense.search(q_vec, k=50)
     sparse_ids = rt.bm25.search(query, k=50) if rt.bm25.is_ready else []

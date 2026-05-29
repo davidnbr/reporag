@@ -22,7 +22,7 @@ import mcp.server.stdio
 from mcp import types
 from mcp.server import Server
 
-from codebrain.config import Config, get_config
+from reporag.config import Config, get_config
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -68,7 +68,7 @@ class _ChangeHandler:
             self._enqueue(dest)
 
     def _enqueue(self, path: str) -> None:
-        from codebrain.indexer.ast_parser import detect_language
+        from reporag.indexer.ast_parser import detect_language
         if not detect_language(Path(path)):
             return
         with self._lock:
@@ -110,7 +110,7 @@ class _ChangeHandler:
         return None
 
     async def _reindex(self, project: str) -> None:
-        from codebrain.tools.index import run as index_run
+        from reporag.tools.index import run as index_run
         await index_run({"path": project, "incremental": True}, self._runtime)
 
 
@@ -143,13 +143,13 @@ class Runtime:
         data = self._data_dir()
         data.mkdir(parents=True, exist_ok=True)
 
-        from codebrain.indexer.chunker import ChunkIndexer
-        from codebrain.indexer.embedder import Embedder
-        from codebrain.indexer.graph_builder import GraphDB
-        from codebrain.memory.store import MemoryStore
-        from codebrain.retrieval.dense import DenseIndex
-        from codebrain.retrieval.reranker import CrossEncoderReranker
-        from codebrain.retrieval.sparse import BM25Index
+        from reporag.indexer.chunker import ChunkIndexer
+        from reporag.indexer.embedder import Embedder
+        from reporag.indexer.graph_builder import GraphDB
+        from reporag.memory.store import MemoryStore
+        from reporag.retrieval.dense import DenseIndex
+        from reporag.retrieval.reranker import CrossEncoderReranker
+        from reporag.retrieval.sparse import BM25Index
 
         self.embedder = Embedder(
             model=self.config.embed_model,
@@ -177,7 +177,7 @@ class Runtime:
                 logger.warning("Could not load BM25 index: %s", exc)
 
         self.reload_graph()
-        logger.info("codebrain runtime initialized (data_dir=%s)", data)
+        logger.info("reporag runtime initialized (data_dir=%s)", data)
 
     def reload_graph(self) -> None:
         """Reload NetworkX graph from SQLite after re-indexing."""
@@ -195,7 +195,7 @@ class Runtime:
         try:
             from watchdog.observers import Observer
         except ImportError:
-            logger.debug("watchdog not installed — install codebrain[watch] to enable file watching")
+            logger.debug("watchdog not installed — install reporag[watch] to enable file watching")
             return
 
         if self._watcher is None:
@@ -210,7 +210,7 @@ class Runtime:
 
     async def _auto_index(self) -> None:
         """Kick off background indexing for all auto_index_paths from config."""
-        from codebrain.tools.index import run as index_run
+        from reporag.tools.index import run as index_run
         for path_str in self.config.auto_index_paths:
             path = Path(path_str).expanduser().resolve()
             if path.exists() and path.is_dir():
@@ -222,7 +222,7 @@ class Runtime:
 
 _runtime = Runtime()
 
-server = Server("codebrain")
+server = Server("reporag")
 
 
 @server.list_tools()
@@ -388,14 +388,14 @@ async def list_tools() -> list[types.Tool]:
 
 @server.call_tool()
 async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextContent]:
-    from codebrain.tools import index, query, symbol
-    from codebrain.tools import memory as mem_tools
+    from reporag.tools import index, query, symbol
+    from reporag.tools import memory as mem_tools
 
     try:
         if name == "index_codebase":
             result = await index.run(arguments, _runtime)
         elif name == "index_status":
-            from codebrain.tools import index_status
+            from reporag.tools import index_status
             result = await index_status.run(arguments, _runtime)
         elif name == "query_code":
             result = await query.run(arguments, _runtime)
@@ -406,16 +406,16 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
         elif name == "recall":
             result = await mem_tools.run_recall(arguments, _runtime)
         elif name == "summarize_project":
-            from codebrain.tools import summarize
+            from reporag.tools import summarize
             result = await summarize.run(arguments, _runtime)
         elif name == "get_architecture":
-            from codebrain.tools import architecture
+            from reporag.tools import architecture
             result = await architecture.run(arguments, _runtime)
         elif name == "project_status":
-            from codebrain.tools import status
+            from reporag.tools import status
             result = await status.run(arguments, _runtime)
         elif name == "ask_project":
-            from codebrain.tools import ask
+            from reporag.tools import ask
             result = await ask.run(arguments, _runtime)
         else:
             result = {"error": f"Unknown tool: {name}"}

@@ -122,7 +122,7 @@ def _parse_scip_output(scip_path: Path, root: Path) -> list[SCIPEdge]:
                 pass
 
     if Index is None:
-        logger.warning("'scip' Python package not installed or incompatible. Run: pip install codebrain")
+        logger.warning("'scip' Python package not installed or incompatible. Run: pip install reporag")
         return []
 
     try:

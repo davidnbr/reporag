@@ -1,5 +1,5 @@
 """Unit tests for RRF fusion — verifies research §4 formula."""
-from codebrain.retrieval.rrf import rrf_fuse, top_k
+from reporag.retrieval.rrf import rrf_fuse, top_k
 
 
 def test_rrf_single_list():

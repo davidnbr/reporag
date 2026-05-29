@@ -17,9 +17,9 @@ from typing import Any
 
 import numpy as np
 
-from codebrain.indexer.ast_parser import Chunk, parse_file
-from codebrain.indexer.semantic_text import chunk_to_semantic_text
-from codebrain.indexer.sliding_window import hybrid_chunks, sliding_window_chunks
+from reporag.indexer.ast_parser import Chunk, parse_file
+from reporag.indexer.semantic_text import chunk_to_semantic_text
+from reporag.indexer.sliding_window import hybrid_chunks, sliding_window_chunks
 
 logger = logging.getLogger(__name__)
 

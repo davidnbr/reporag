@@ -6,33 +6,33 @@ from pathlib import Path
 
 from pydantic import BaseModel
 
-CONFIG_PATH = Path.home() / ".config" / "codebrain" / "config.json"
+CONFIG_PATH = Path.home() / ".config" / "reporag" / "config.json"
 
 _ENV_MAP = {
-    "CODEBRAIN_EMBED_MODEL": "embed_model",
-    "CODEBRAIN_EMBED_BACKEND": "embed_backend",
-    "CODEBRAIN_OLLAMA_URL": "ollama_url",
-    "CODEBRAIN_DATA_DIR": "data_dir",
-    "CODEBRAIN_RERANKER_MODEL": "reranker_model",
-    "CODEBRAIN_RERANKER_K": "reranker_k",
-    "CODEBRAIN_RERANK_BY_DEFAULT": "rerank_by_default",
-    "CODEBRAIN_BM25_K1": "bm25_k1",
-    "CODEBRAIN_BM25_B": "bm25_b",
-    "CODEBRAIN_RRF_K": "rrf_k",
-    "CODEBRAIN_PPR_ALPHA": "ppr_alpha",
-    "CODEBRAIN_PPR_SEED_K": "ppr_seed_k",
-    "CODEBRAIN_DENSE_CANDIDATES": "dense_candidates",
-    "CODEBRAIN_SPARSE_CANDIDATES": "sparse_candidates",
-    "CODEBRAIN_SUBGRAPH_HOPS": "subgraph_hops",
-    "CODEBRAIN_SNIPPET_CHARS": "snippet_chars",
-    "CODEBRAIN_RRF_DENSE_WEIGHT": "rrf_dense_weight",
-    "CODEBRAIN_RRF_SPARSE_WEIGHT": "rrf_sparse_weight",
-    "CODEBRAIN_MIN_GRAPH_EDGES_PPR": "min_graph_edges_for_ppr",
-    "CODEBRAIN_CHUNK_STRATEGY": "chunk_strategy",
-    "CODEBRAIN_CHUNK_WINDOW_LINES": "chunk_window_lines",
-    "CODEBRAIN_CHUNK_OVERLAP_LINES": "chunk_overlap_lines",
-    "CODEBRAIN_INDEX_BATCH_SIZE": "index_batch_size",
-    "CODEBRAIN_WATCH_DEBOUNCE_S": "watch_debounce_s",
+    "REPORAG_EMBED_MODEL": "embed_model",
+    "REPORAG_EMBED_BACKEND": "embed_backend",
+    "REPORAG_OLLAMA_URL": "ollama_url",
+    "REPORAG_DATA_DIR": "data_dir",
+    "REPORAG_RERANKER_MODEL": "reranker_model",
+    "REPORAG_RERANKER_K": "reranker_k",
+    "REPORAG_RERANK_BY_DEFAULT": "rerank_by_default",
+    "REPORAG_BM25_K1": "bm25_k1",
+    "REPORAG_BM25_B": "bm25_b",
+    "REPORAG_RRF_K": "rrf_k",
+    "REPORAG_PPR_ALPHA": "ppr_alpha",
+    "REPORAG_PPR_SEED_K": "ppr_seed_k",
+    "REPORAG_DENSE_CANDIDATES": "dense_candidates",
+    "REPORAG_SPARSE_CANDIDATES": "sparse_candidates",
+    "REPORAG_SUBGRAPH_HOPS": "subgraph_hops",
+    "REPORAG_SNIPPET_CHARS": "snippet_chars",
+    "REPORAG_RRF_DENSE_WEIGHT": "rrf_dense_weight",
+    "REPORAG_RRF_SPARSE_WEIGHT": "rrf_sparse_weight",
+    "REPORAG_MIN_GRAPH_EDGES_PPR": "min_graph_edges_for_ppr",
+    "REPORAG_CHUNK_STRATEGY": "chunk_strategy",
+    "REPORAG_CHUNK_WINDOW_LINES": "chunk_window_lines",
+    "REPORAG_CHUNK_OVERLAP_LINES": "chunk_overlap_lines",
+    "REPORAG_INDEX_BATCH_SIZE": "index_batch_size",
+    "REPORAG_WATCH_DEBOUNCE_S": "watch_debounce_s",
 }
 
 
@@ -40,7 +40,7 @@ class Config(BaseModel):
     embed_model: str = "nomic-ai/nomic-embed-text-v1"
     embed_backend: str = "sentence-transformers"  # "sentence-transformers" | "ollama"
     ollama_url: str = "http://localhost:11434"
-    data_dir: str = "~/.local/share/codebrain"
+    data_dir: str = "~/.local/share/reporag"
     # Reranker: bge-reranker-base outperforms ms-marco-MiniLM-L6 (nDCG@10 0.699 vs 0.662)
     # rerank_by_default=False: CodeRAG-Bench shows MS-MARCO rerankers degrade code retrieval
     reranker_model: str = "BAAI/bge-reranker-base"

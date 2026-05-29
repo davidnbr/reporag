@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from codebrain.indexer.ast_parser import Chunk, detect_language
+from reporag.indexer.ast_parser import Chunk, detect_language
 
 
 def sliding_window_chunks(
@@ -74,7 +74,7 @@ def hybrid_chunks(
     Preserves symbol lookup (named AST chunks) while filling module-level code,
     imports, and inter-function regions that function-level chunking drops.
     """
-    from codebrain.indexer.ast_parser import parse_file
+    from reporag.indexer.ast_parser import parse_file
 
     ast_chunks = parse_file(path)
     if not ast_chunks:

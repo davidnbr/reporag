@@ -49,10 +49,10 @@ dev = [
 ]
 
 [project.scripts]
-reporag = "codebrain.server:main"
+reporag = "reporag.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["codebrain"]
+packages = ["reporag"]
 
 [tool.ruff]
 target-version = "py312"
