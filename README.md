@@ -93,12 +93,12 @@ MCP clients then launch the server automatically via `uvx`. No manual install st
 ```json
 {
   "mcpServers": {
-    "codebrain": {
+    "reporag": {
       "command": "uvx",
       "args": [
         "--from",
-        "codebrain[ml] @ git+https://github.com/davidnbr/codebrain.git",
-        "codebrain"
+        "reporag[ml] @ git+https://github.com/davidnbr/codebrain.git",
+        "reporag"
       ],
       "env": {
         "CODEBRAIN_DATA_DIR": "~/.local/share/codebrain"
@@ -117,7 +117,7 @@ Same format as above.
 ```json
 {
   "command": "uvx",
-  "args": ["--from", "codebrain[ml] @ git+https://github.com/davidnbr/codebrain.git", "codebrain"],
+  "args": ["--from", "reporag[ml] @ git+https://github.com/davidnbr/codebrain.git", "reporag"],
   "env": { "CODEBRAIN_DATA_DIR": "~/.local/share/codebrain" }
 }
 ```

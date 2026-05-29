@@ -42,7 +42,7 @@ def runtime() -> Any:
         import lancedb  # noqa: F401
         import sentence_transformers  # noqa: F401
     except ImportError:
-        pytest.skip("ML extras not installed (pip install codebrain[ml])")
+        pytest.skip("ML extras not installed (pip install reporag[ml])")
 
     rt = Runtime(config=get_config())
     try:

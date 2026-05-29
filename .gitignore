@@ -25,3 +25,4 @@ devenv.local.yaml
 .pytest_cache
 __pycache__
 .codebrain/
+.reporag/
