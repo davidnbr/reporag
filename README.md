@@ -86,6 +86,15 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 MCP clients then launch the server automatically via `uvx`. No manual install step.
 
+> **First-run note:** `reporag[ml]` pulls `sentence-transformers` → `torch` (~2 GB with CUDA by default).
+> On CPU-only machines, pre-install the smaller CPU-only torch first to cut download to ~250 MB:
+>
+> ```bash
+> pip install torch --index-url https://download.pytorch.org/whl/cpu
+> ```
+>
+> After that, `uvx` will reuse the cached torch and skip the full download.
+
 ## Configure
 
 ### Claude Code (`~/.claude/.mcp.json`)
