@@ -434,8 +434,13 @@ async def _serve() -> None:
     if _runtime.config.auto_index_paths:
         asyncio.create_task(_runtime._auto_index())
 
-    async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream, server.create_initialization_options())
+    try:
+        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+            await server.run(read_stream, write_stream, server.create_initialization_options())
+    finally:
+        if _runtime._watcher is not None:
+            _runtime._watcher.stop()
+            _runtime._watcher.join(timeout=2)
 
 
 def main() -> None:
