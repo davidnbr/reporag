@@ -37,6 +37,7 @@ class Embedder:
         self.ollama_url = ollama_url
         self._st_model: object | None = None
         self._use_nomic_prefix = "nomic" in model.lower()
+        self._loaded_model: str = model  # actual model name after fallback
 
     def _load_st(self) -> None:
         if self._st_model is not None:
@@ -49,6 +50,7 @@ class Embedder:
             from sentence_transformers import SentenceTransformer
             self._st_model = SentenceTransformer(_MINILM_MODEL)
             self._use_nomic_prefix = False
+            self._loaded_model = _MINILM_MODEL
 
     def _apply_prefix(self, texts: list[str], mode: Literal["index", "query"]) -> list[str]:
         if not self._use_nomic_prefix:
@@ -102,5 +104,5 @@ class Embedder:
 
     @property
     def dim(self) -> int:
-        """Return embedding dimension."""
-        return 768 if "nomic" in self.model.lower() else 384
+        """Return embedding dimension of the actually-loaded model."""
+        return 768 if "nomic" in self._loaded_model.lower() else 384

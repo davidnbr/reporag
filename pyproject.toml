@@ -38,6 +38,7 @@ ml = [
     "sentence-transformers>=3.0.0",
     "lancedb>=0.8.0",
     "pyarrow>=16.0.0",
+    "einops>=0.7.0",  # required by nomic-ai/nomic-embed-text-v1
 ]
 watch = [
     "watchdog>=4.0.0",
