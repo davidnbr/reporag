@@ -235,6 +235,21 @@ uv sync --extra dev
 pytest tests/ -v
 ```
 
+### Regenerating `scip_pb2.py`
+
+`reporag/indexer/scip_pb2.py` is a generated protobuf file built from the
+[Sourcegraph SCIP proto](https://github.com/sourcegraph/scip/blob/main/scip.proto).
+It ships pre-generated so users don't need build tools. Regenerate when the SCIP
+protocol version changes:
+
+```bash
+pip install grpcio-tools   # one-time — bundles protoc, no system install needed
+python scripts/generate_scip_pb2.py
+```
+
+The script fetches the latest `scip.proto` from Sourcegraph's repo and writes
+`reporag/indexer/scip_pb2.py`. Commit the result alongside any `scip_indexer.py` changes.
+
 ## Supported languages
 
 Python, JavaScript, TypeScript, Go, Rust, Java, C, C++

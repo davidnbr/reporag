@@ -103,10 +103,10 @@ def _parse_scip_output(scip_path: Path, root: Path) -> list[SCIPEdge]:
     if not scip_path.exists() or scip_path.stat().st_size == 0:
         return []
 
-    # Try multiple import paths — scip package API differs across 0.1.x versions
+    # Try bundled scip_pb2 first (generated from scip.proto, ships with reporag)
     Index = None
     try:
-        from scip import Index  # type: ignore[import]  # noqa: PLC0415
+        from reporag.indexer.scip_pb2 import Index  # type: ignore[import]  # noqa: PLC0415
     except (ImportError, AttributeError):
         try:
             import scip_pb2  # type: ignore[import]  # noqa: PLC0415

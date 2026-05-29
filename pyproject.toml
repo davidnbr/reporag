@@ -28,7 +28,7 @@ dependencies = [
     "tree-sitter-c>=0.23.0",
     "tree-sitter-cpp>=0.23.0",
     # SCIP protobuf parsing (heuristic fallback used if no SCIP CLI installed)
-    "scip>=0.1.12",
+    # scip PyPI package excluded — pulls aicsimageio→lxml (C build deps, unrelated)
     "protobuf>=4.25.0",
 ]
 
@@ -46,6 +46,7 @@ dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.23.0",
     "ruff>=0.4.0",
+    "grpcio-tools>=1.60.0",  # protoc for regenerating scip_pb2.py
 ]
 
 [project.scripts]
