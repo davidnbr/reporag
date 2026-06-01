@@ -33,12 +33,22 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Heavy ML stack — sentence-transformers pulls torch (~2GB)
+# Heavy ML stack — sentence-transformers pulls torch (~2GB CUDA by default)
 ml = [
     "sentence-transformers>=3.0.0",
     "lancedb>=0.8.0",
     "pyarrow>=16.0.0",
     "einops>=0.7.0",  # required by nomic-ai/nomic-embed-text-v1
+    "torch>=2.0.0",
+]
+# Same as [ml] but torch comes from the CPU-only PyTorch index (~250 MB).
+# Requires uv — pip ignores [tool.uv.sources]. Use when no GPU is available.
+ml-cpu = [
+    "sentence-transformers>=3.0.0",
+    "lancedb>=0.8.0",
+    "pyarrow>=16.0.0",
+    "einops>=0.7.0",
+    "torch>=2.0.0",
 ]
 watch = [
     "watchdog>=4.0.0",
@@ -75,4 +85,16 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 markers = [
     "integration: requires ML extras and a live index (deselect with '-m not integration')",
+]
+
+# uv-only: redirect torch to CPU-only wheel when installing [ml-cpu].
+# pip users must set UV_EXTRA_INDEX_URL + UV_INDEX_STRATEGY manually (see README).
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+[tool.uv.sources]
+torch = [
+    { index = "pytorch-cpu", extra = "ml-cpu" },
 ]

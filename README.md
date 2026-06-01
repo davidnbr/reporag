@@ -86,14 +86,14 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 MCP clients then launch the server automatically via `uvx`. No manual install step.
 
-> **First-run note:** `reporag[ml]` pulls `sentence-transformers` → `torch` (~2 GB with CUDA by default).
-> On CPU-only machines, pre-install the smaller CPU-only torch first to cut download to ~250 MB:
->
-> ```bash
-> pip install torch --index-url https://download.pytorch.org/whl/cpu
-> ```
->
-> After that, `uvx` will reuse the cached torch and skip the full download.
+Two install variants:
+
+| Extra | Torch | First-run download | Use when |
+|-------|-------|--------------------|----------|
+| `[ml]` | CUDA | ~2 GB | NVIDIA GPU available |
+| `[ml-cpu]` | CPU-only | ~250 MB | No GPU / most developer machines |
+
+`[ml-cpu]` uses `[tool.uv.sources]` to redirect torch to the PyTorch CPU index — **requires uv** (ignored by pip). reporag runs purely on CPU regardless; the embed models fit in RAM and latency is acceptable.
 
 ## Configure
 
@@ -106,7 +106,7 @@ MCP clients then launch the server automatically via `uvx`. No manual install st
       "command": "uvx",
       "args": [
         "--from",
-        "reporag[ml] @ git+https://github.com/davidnbr/reporag.git",
+        "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git",
         "reporag"
       ],
       "env": {
@@ -117,6 +117,8 @@ MCP clients then launch the server automatically via `uvx`. No manual install st
 }
 ```
 
+Use `reporag[ml]` instead if you have an NVIDIA GPU and want CUDA-accelerated embedding.
+
 ### agy / antigravity (`~/.gemini/antigravity/mcp_config.json`)
 
 Same format as above.
@@ -126,7 +128,7 @@ Same format as above.
 ```json
 {
   "command": "uvx",
-  "args": ["--from", "reporag[ml] @ git+https://github.com/davidnbr/reporag.git", "reporag"],
+  "args": ["--from", "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git", "reporag"],
   "env": { "REPORAG_DATA_DIR": "~/.local/share/reporag" }
 }
 ```
