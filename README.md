@@ -80,9 +80,19 @@ devenv shell -- python scripts/benchmark.py --filter-chunk-types function --quie
 
 Retrieval recall measures _whether_ the right chunk is returned. This benchmark measures _whether Claude gives a better answer_ when that chunk is injected as context.
 
-**Method:** For each sampled function/class, generate a question (`"How does {name} work?"`), call Claude twice — once with no context (baseline), once with retrieved chunks injected (RAG) — then use Claude as judge to score both responses on correctness, completeness, and hallucination avoidance (1–5 each). Scores use `claude -p` (Claude Code CLI, no API key required).
+**Method:** For each sampled function/class, generate a question (`"How does {name} work?"`), call Claude twice — once with no context (baseline), once with retrieved chunks injected (RAG) — then use Claude as judge to score both responses on correctness, completeness, and hallucination avoidance (1–5 each). Uses `claude -p` (Claude Code CLI, no API key required).
 
-#### reporag **known codebase with small tasks** (39 files, 266 chunks, 17/30 samples scored)
+#### Summary
+
+| Codebase         | Files | Chunks | Baseline | RAG  | Composite Δ |
+| ---------------- | ----- | ------ | -------- | ---- | ----------- |
+| reporag          | 39    | 266    | 3.98     | 4.16 | **+4.4%**   |
+| "other_codebase" | 74    | 488    | 2.24     | 3.84 | **+71.3%**  |
+| Django           | 2,955 | 45k    | 2.35     | 4.25 | **+81.1%**  |
+
+The less Claude knows about a codebase from training, the larger the RAG gain. reporag uses textbook patterns Claude has seen extensively — baseline is already strong. Django has large implementation-specific surfaces Claude cannot reconstruct from training alone.
+
+#### reporag (39 files, 266 chunks, 17/30 scored)
 
 | Metric        | Baseline | RAG      | Δ (%)     |
 | ------------- | -------- | -------- | --------- |
@@ -91,28 +101,36 @@ Retrieval recall measures _whether_ the right chunk is returned. This benchmark 
 | hallucination | 3.82     | 3.94     | +3.1%     |
 | **composite** | **3.98** | **4.16** | **+4.4%** |
 
-Small improvement: reporag uses well-known patterns (MCP, Python, RAG) Claude partially knows from training. RAG helps most on completeness — the actual source code makes answers more thorough.
+Small improvement: well-known patterns (MCP, Python, RAG). RAG helps most on completeness — actual source code makes answers more thorough.
 
-#### **bigger codebase with larger tasks** (74 files, 488 chunks, 30/30 samples scored)
+#### "other_codebase" (74 files, 488 chunks, 30/30 scored)
 
-| Metric        | Baseline | RAG      | Δ (%)       |
-| ------------- | -------- | -------- | ----------- |
-| correctness   | 1.27     | 3.57     | **+181.6%** |
-| completeness  | 1.13     | 3.53     | **+211.8%** |
-| hallucination | 4.33     | 4.43     | +2.3%       |
-| **composite** | **2.24** | **3.84** | **+71.3%**  |
+| Metric        | Baseline | RAG      | Δ (%)      |
+| ------------- | -------- | -------- | ---------- |
+| correctness   | 1.27     | 3.57     | +181.6%    |
+| completeness  | 1.13     | 3.53     | +211.8%    |
+| hallucination | 4.33     | 4.43     | +2.3%      |
+| **composite** | **2.24** | **3.84** | **+71.3%** |
 
-Dramatic improvement on an unfamiliar codebase. Baseline correctness/completeness near 1 (Claude cannot answer without context). Hallucination already high at baseline — Claude hedges rather than inventing. RAG context raises response quality by ~2.5× on correctness and completeness.
+Baseline near 1 — Claude cannot answer without context. Hallucination high at baseline (Claude hedges rather than inventing). RAG raises quality by ~2.5× on correctness and completeness.
 
-**Takeaway:** reporag's retrieval quality improvement (+4.4%) is modest on well-known codebases where Claude has prior knowledge. On private or domain-specific codebases, the impact is **+71% composite** — the core use case.
+#### Django (2,955 files, 45k chunks, 24/30 scored)
 
-Run the LLM quality benchmark on your own codebase:
+| Metric        | Baseline | RAG      | Δ (%)      |
+| ------------- | -------- | -------- | ---------- |
+| correctness   | 1.33     | 4.25     | +218.8%    |
+| completeness  | 1.17     | 4.21     | +260.7%    |
+| hallucination | 4.54     | 4.29     | -5.5%      |
+| **composite** | **2.35** | **4.25** | **+81.1%** |
+
+Largest correctness/completeness gains. Hallucination slightly regresses with RAG: injecting 10 chunks causes Claude to synthesize across chunks in ways that diverge from the single ground-truth function. Baseline Claude hedges cleanly; RAG Claude answers but over-extends retrieved context.
+
+**Takeaway:** on private or large codebases where Claude has no training data, reporag delivers **+71–81% composite quality improvement** — turning unusable baselines (1.1–1.3) into competent answers (3.8–4.2).
+
+Run on your own codebase:
 
 ```bash
-# index first
-reporag index_codebase path=/path/to/project
-
-# run eval (uses claude -p — requires Claude Code CLI, no API key)
+# index first (via MCP tool in Claude Code), then:
 devenv shell -- python scripts/llm_eval.py --project /path/to/project --samples 30 --output results.json
 ```
 
