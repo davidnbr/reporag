@@ -567,14 +567,13 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
     hooks_cfg = settings.setdefault("hooks", {})
     up_hooks: list = hooks_cfg.setdefault("UserPromptSubmit", [])
 
-    def _hook_command(h: dict) -> str | None:
-        entries = h.get("hooks") or []
-        return entries[0].get("command") if entries else None
+    def _hook_commands(h: dict) -> list[str]:
+        return [e.get("command", "") for e in (h.get("hooks") or [])]
 
     changed = False
     for dest in installed:
         command = str(dest)
-        already = any(_hook_command(h) == command for h in up_hooks)
+        already = any(command in _hook_commands(h) for h in up_hooks)
         if not already:
             up_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": command}]})
             changed = True
@@ -611,6 +610,9 @@ def _cmd_setup_hooks() -> None:
     print("\nDone. Restart Claude Code to activate hooks.")
 
 
+# NOTE: this block targets uvx-from-git installs. Users who installed via
+# `pip install reporag` or a local path should edit ~/.cursor/mcp.json manually
+# to point at their install (e.g. replace "uvx --from ..." with the reporag binary path).
 _MCP_CONFIG_BLOCK = {
     "command": "uvx",
     "args": [
