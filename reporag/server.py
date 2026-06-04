@@ -490,6 +490,8 @@ async def _serve() -> None:
     _runtime._loop = asyncio.get_event_loop()
     _runtime.index_sem = asyncio.Semaphore(1)  # serialise concurrent index runs
 
+    _auto_setup_hooks()
+
     if _runtime.config.auto_index_paths:
         asyncio.create_task(_runtime._auto_index())
 
@@ -523,23 +525,18 @@ def _cmd_status() -> None:
     print(json.dumps(result, indent=2))
 
 
-def _cmd_setup_hooks() -> None:
-    import argparse
+def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
+    """Install reporag Claude Code hooks. Returns True if settings changed."""
     import shutil
-    import sys
 
-    p = argparse.ArgumentParser(prog="reporag setup-hooks")
-    p.add_argument("--claude-dir", default="~/.claude", help="Claude config directory")
-    args = p.parse_args(sys.argv[2:])
+    pkg_hooks = Path(__file__).parent / "hooks"
+    if not pkg_hooks.exists():
+        if verbose:
+            print(f"Hook scripts not found at {pkg_hooks}")
+        return False
 
-    claude_dir = Path(args.claude_dir).expanduser()
     hooks_dir = claude_dir / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
-
-    pkg_hooks = Path(__file__).parent.parent / "scripts" / "claude-hooks"
-    if not pkg_hooks.exists():
-        print(f"Hook scripts not found at {pkg_hooks}")
-        return
 
     installed: list[Path] = []
     for hook_file in sorted(pkg_hooks.glob("reporag-*.py")):
@@ -547,11 +544,11 @@ def _cmd_setup_hooks() -> None:
         shutil.copy2(hook_file, dest)
         dest.chmod(0o755)
         installed.append(dest)
-        print(f"  copied → {dest}")
+        if verbose:
+            print(f"  copied → {dest}")
 
     if not installed:
-        print("No hook scripts found.")
-        return
+        return False
 
     settings_path = claude_dir / "settings.json"
     try:
@@ -562,6 +559,7 @@ def _cmd_setup_hooks() -> None:
     hooks_cfg = settings.setdefault("hooks", {})
     up_hooks: list = hooks_cfg.setdefault("UserPromptSubmit", [])
 
+    changed = False
     for dest in installed:
         command = f"python3 {dest}"
         already = any(
@@ -570,9 +568,37 @@ def _cmd_setup_hooks() -> None:
         )
         if not already:
             up_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": command}]})
+            changed = True
 
-    settings_path.write_text(json.dumps(settings, indent=2))
-    print(f"  updated → {settings_path}")
+    if changed:
+        settings_path.write_text(json.dumps(settings, indent=2))
+        if verbose:
+            print(f"  updated → {settings_path}")
+
+    return changed
+
+
+def _auto_setup_hooks() -> None:
+    """Called on MCP server start — installs hooks automatically on first connection."""
+    try:
+        claude_dir = Path.home() / ".claude"
+        changed = _setup_hooks_impl(claude_dir, verbose=False)
+        if changed:
+            logger.info("reporag: Claude Code hooks installed automatically (restart Claude Code to activate)")
+    except Exception:
+        pass  # never break the MCP server
+
+
+def _cmd_setup_hooks() -> None:
+    import argparse
+    import sys
+
+    p = argparse.ArgumentParser(prog="reporag setup-hooks")
+    p.add_argument("--claude-dir", default="~/.claude", help="Claude config directory")
+    args = p.parse_args(sys.argv[2:])
+
+    claude_dir = Path(args.claude_dir).expanduser()
+    _setup_hooks_impl(claude_dir, verbose=True)
     print("\nDone. Restart Claude Code to activate hooks.")
 
 
