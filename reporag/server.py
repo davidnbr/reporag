@@ -554,7 +554,12 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
     try:
         settings: dict = json.loads(settings_path.read_text()) if settings_path.exists() else {}
     except json.JSONDecodeError:
-        settings = {}
+        msg = f"  warning: {settings_path} contains invalid JSON — skipping to avoid data loss. Fix manually and re-run."
+        if verbose:
+            print(msg)
+        else:
+            logger.warning(msg)
+        return False
 
     hooks_cfg = settings.setdefault("hooks", {})
     up_hooks: list = hooks_cfg.setdefault("UserPromptSubmit", [])
@@ -602,6 +607,102 @@ def _cmd_setup_hooks() -> None:
     print("\nDone. Restart Claude Code to activate hooks.")
 
 
+_MCP_CONFIG_BLOCK = {
+    "command": "uvx",
+    "args": [
+        "--from",
+        "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git",
+        "reporag",
+    ],
+    "env": {"REPORAG_DATA_DIR": "~/.local/share/reporag"},
+}
+
+_CURSORRULES_SNIPPET = """\
+# reporag — local RAG code search
+# When answering questions about code in this project:
+# 1. Call query_code to retrieve relevant context before answering
+# 2. Call index_codebase if the project has not been indexed yet
+# 3. Call get_symbol for exact function/class lookups
+Use the reporag MCP tools proactively for all code questions.
+"""
+
+
+def _setup_cursor_impl(cursor_dir: Path, verbose: bool = False) -> bool:
+    """Write ~/.cursor/mcp.json and install Cursor rules. Returns True if changed."""
+    cursor_dir.mkdir(parents=True, exist_ok=True)
+    mcp_path = cursor_dir / "mcp.json"
+
+    try:
+        mcp: dict = json.loads(mcp_path.read_text()) if mcp_path.exists() else {}
+    except json.JSONDecodeError:
+        msg = f"  warning: {mcp_path} contains invalid JSON — skipping to avoid data loss. Fix manually and re-run."
+        if verbose:
+            print(msg)
+        else:
+            logger.warning(msg)
+        return False
+
+    servers = mcp.setdefault("mcpServers", {})
+    changed = "reporag" not in servers or servers["reporag"] != _MCP_CONFIG_BLOCK
+    servers["reporag"] = _MCP_CONFIG_BLOCK
+    mcp_path.write_text(json.dumps(mcp, indent=2))
+    if verbose:
+        print(f"  written → {mcp_path}")
+
+    # Cursor ≥0.50 global rules dir
+    rules_dir = cursor_dir / "rules"
+    rules_path = rules_dir / "reporag.mdc"
+    if not rules_path.exists():
+        rules_dir.mkdir(parents=True, exist_ok=True)
+        rules_path.write_text(
+            "---\ndescription: Use reporag MCP for code questions\nalwaysApply: true\n---\n"
+            + _CURSORRULES_SNIPPET
+        )
+        if verbose:
+            print(f"  written → {rules_path}")
+        changed = True
+    elif verbose:
+        print(f"  exists  → {rules_path} (not overwritten)")
+
+    if verbose:
+        print(
+            "\nFor older Cursor versions, add to your project's .cursorrules:\n"
+            + _CURSORRULES_SNIPPET
+        )
+
+    return changed
+
+
+def _cmd_setup() -> None:
+    import argparse
+    import sys
+
+    p = argparse.ArgumentParser(
+        prog="reporag setup",
+        description="Configure reporag for Claude Code, Cursor, or both.",
+    )
+    p.add_argument(
+        "--client",
+        choices=["claude", "cursor", "all"],
+        default="all",
+        help="Which AI client to configure (default: all)",
+    )
+    p.add_argument("--claude-dir", default="~/.claude")
+    p.add_argument("--cursor-dir", default="~/.cursor")
+    args = p.parse_args(sys.argv[2:])
+
+    clients = ["claude", "cursor"] if args.client == "all" else [args.client]
+
+    for client in clients:
+        print(f"\n[{client}]")
+        if client == "claude":
+            _setup_hooks_impl(Path(args.claude_dir).expanduser(), verbose=True)
+            print("  Restart Claude Code to activate hooks.")
+        else:
+            _setup_cursor_impl(Path(args.cursor_dir).expanduser(), verbose=True)
+            print("  Restart Cursor to activate.")
+
+
 def main() -> None:
     import sys
 
@@ -610,8 +711,11 @@ def main() -> None:
         if cmd == "status":
             _cmd_status()
             return
-        if cmd == "setup-hooks":
-            _cmd_setup_hooks()
+        if cmd in ("setup", "setup-hooks"):
+            if cmd == "setup-hooks":
+                _cmd_setup_hooks()  # backward-compat alias
+            else:
+                _cmd_setup()
             return
 
     asyncio.run(_serve())

@@ -87,7 +87,7 @@ Retrieval recall measures _whether_ the right chunk is returned. This benchmark 
 | Codebase         | Files | Chunks | Baseline | RAG  | Composite Δ |
 | ---------------- | ----- | ------ | -------- | ---- | ----------- |
 | reporag          | 39    | 266    | 3.98     | 4.16 | **+4.4%**   |
-| "other_codebase" | 74    | 488    | 2.24     | 3.84 | **+71.3%**  |
+| private Go project | 74  | 488    | 2.24     | 3.84 | **+71.3%**  |
 | Django           | 2,955 | 45k    | 2.35     | 4.25 | **+81.1%**  |
 
 The less Claude knows about a codebase from training, the larger the RAG gain. reporag uses textbook patterns Claude has seen extensively — baseline is already strong. Django has large implementation-specific surfaces Claude cannot reconstruct from training alone.
@@ -103,7 +103,7 @@ The less Claude knows about a codebase from training, the larger the RAG gain. r
 
 Small improvement: well-known patterns (MCP, Python, RAG). RAG helps most on completeness — actual source code makes answers more thorough.
 
-#### "other_codebase" (74 files, 488 chunks, 30/30 scored)
+#### Private Go project (74 files, 488 chunks, 30/30 scored)
 
 | Metric        | Baseline | RAG      | Δ (%)      |
 | ------------- | -------- | -------- | ---------- |
@@ -182,6 +182,26 @@ Use `reporag[ml]` instead if you have an NVIDIA GPU and want CUDA-accelerated em
 
 Same format as above.
 
+### Cursor (`~/.cursor/mcp.json`)
+
+Run `reporag setup --client cursor` to write this automatically, or add manually:
+
+```json
+{
+  "mcpServers": {
+    "reporag": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git",
+        "reporag"
+      ],
+      "env": { "REPORAG_DATA_DIR": "~/.local/share/reporag" }
+    }
+  }
+}
+```
+
 ### Any other MCP client
 
 ```json
@@ -241,44 +261,57 @@ Persistent knowledge store across sessions.
 { "query": "auth token decisions", "tags": ["auth"] }
 ```
 
-## Claude Code Hooks (auto-index + auto-use)
-
-Two `UserPromptSubmit` hooks ship inside the reporag package and are **installed automatically** the first time the MCP server connects to Claude Code. No manual step required.
-
-If you need to reinstall (e.g. after updating reporag or changing the Claude config directory):
+## Client Setup
 
 ```bash
-uvx --from "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git" reporag setup-hooks
-# then restart Claude Code
+# Configure both Claude Code and Cursor at once:
+uvx --from "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git" \
+    reporag setup --client all
+
+# Or configure individually:
+reporag setup --client claude   # Claude Code only
+reporag setup --client cursor   # Cursor only
 ```
 
-### What the hooks do
+Then restart the client.
 
-**`reporag-autoindex`** — fires on every prompt. If the current working directory has not been indexed, outputs:
+### Claude Code
 
+Two `UserPromptSubmit` hooks ship inside the package and are **installed automatically** the first time the MCP server connects — no manual step needed.
+
+The hooks install into `~/.claude/hooks/` and register in `~/.claude/settings.json`:
+
+**`reporag-autoindex`** — fires on every prompt. If the current directory is not indexed:
 ```
 [reporag] /path/to/project has not been indexed yet.
-Call index_codebase with path="/path/to/project" to enable code search and retrieval.
+Call index_codebase with path="/path/to/project" to enable code search.
 ```
+Claude automatically calls `index_codebase` before answering.
 
-Claude sees this as a system reminder and automatically calls `index_codebase` before answering — no manual tool invocation needed.
-
-**`reporag-hint`** — fires on code-related prompts (`how`, `where`, `explain`, `fix`, `debug`, etc.). If the project is indexed, outputs:
-
+**`reporag-hint`** — fires on code-related prompts. If the project is indexed:
 ```
 [reporag] /path/to/project is indexed (285 chunks).
 Use query_code to retrieve relevant context before answering.
 ```
+Claude proactively calls `query_code` (dense + BM25 + RRF + PPR pipeline) before answering.
 
-Claude proactively calls `query_code` (full dense + BM25 + RRF + PPR pipeline) before generating a response.
+Both hooks read `~/.local/share/reporag/projects.json` — no ML imports, < 5 ms overhead.
 
-Both hooks read a lightweight JSON registry (`~/.local/share/reporag/projects.json`) — no ML dependencies loaded, < 5 ms overhead per prompt.
+### Cursor
 
-### Additional CLI commands
+Writes `~/.cursor/mcp.json` with the reporag server config and creates `~/.cursor/rules/reporag.mdc` (Cursor ≥0.50 global rules, `alwaysApply: true`) instructing Cursor to use `query_code` and `index_codebase` proactively.
+
+For older Cursor versions, add to your project's `.cursorrules`:
+```
+Use the reporag MCP tools for all code questions:
+query_code before answering, index_codebase if not indexed, get_symbol for lookups.
+```
+
+### Additional CLI
 
 ```bash
 reporag status --project /path/to/project    # check if a project is indexed
-reporag setup-hooks [--claude-dir ~/.claude] # (re-)install hooks manually
+reporag setup-hooks [--claude-dir ~/.claude] # reinstall Claude Code hooks only
 ```
 
 ## Configuration
