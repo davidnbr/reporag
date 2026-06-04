@@ -241,6 +241,45 @@ Persistent knowledge store across sessions.
 { "query": "auth token decisions", "tags": ["auth"] }
 ```
 
+## Claude Code Hooks (auto-index + auto-use)
+
+Two `UserPromptSubmit` hooks ship with reporag. Install them once:
+
+```bash
+uvx --from "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git" reporag setup-hooks
+```
+
+Then restart Claude Code.
+
+### What the hooks do
+
+**`reporag-autoindex`** — fires on every prompt. If the current working directory has not been indexed, outputs:
+
+```
+[reporag] /path/to/project has not been indexed yet.
+Call index_codebase with path="/path/to/project" to enable code search and retrieval.
+```
+
+Claude sees this as a system reminder and automatically calls `index_codebase` before answering. No manual tool invocation needed.
+
+**`reporag-hint`** — fires on code-related prompts (contains keywords like `how`, `where`, `explain`, `fix`, `debug`, etc.). If the project is indexed, outputs:
+
+```
+[reporag] /path/to/project is indexed (285 chunks).
+Use query_code to retrieve relevant context before answering.
+```
+
+Claude proactively calls `query_code` with the full retrieval pipeline (dense + BM25 + RRF + PPR) before generating a response.
+
+Both hooks read a lightweight JSON registry (`~/.local/share/reporag/projects.json`) — no ML dependencies loaded, < 5 ms overhead per prompt.
+
+### CLI commands added by hooks setup
+
+```bash
+reporag status --project /path/to/project   # check index status
+reporag setup-hooks [--claude-dir ~/.claude] # (re-)install hooks
+```
+
 ## Configuration
 
 Config file: `~/.config/reporag/config.json` (optional — all fields have defaults)

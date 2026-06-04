@@ -502,7 +502,92 @@ async def _serve() -> None:
             _runtime._watcher.join(timeout=2)
 
 
+def _cmd_status() -> None:
+    import argparse
+    import sys
+
+    from reporag.projects import all_projects, get
+
+    p = argparse.ArgumentParser(prog="reporag status")
+    p.add_argument("--project", type=str, help="Check a specific project path")
+    args = p.parse_args(sys.argv[2:])
+
+    if args.project:
+        info = get(args.project)
+        result: dict = info or {"chunks": 0, "files": 0, "indexed": False}
+        result["project"] = args.project
+        result.setdefault("indexed", info is not None)
+    else:
+        result = all_projects()
+
+    print(json.dumps(result, indent=2))
+
+
+def _cmd_setup_hooks() -> None:
+    import argparse
+    import shutil
+    import sys
+
+    p = argparse.ArgumentParser(prog="reporag setup-hooks")
+    p.add_argument("--claude-dir", default="~/.claude", help="Claude config directory")
+    args = p.parse_args(sys.argv[2:])
+
+    claude_dir = Path(args.claude_dir).expanduser()
+    hooks_dir = claude_dir / "hooks"
+    hooks_dir.mkdir(parents=True, exist_ok=True)
+
+    pkg_hooks = Path(__file__).parent.parent / "scripts" / "claude-hooks"
+    if not pkg_hooks.exists():
+        print(f"Hook scripts not found at {pkg_hooks}")
+        return
+
+    installed: list[Path] = []
+    for hook_file in sorted(pkg_hooks.glob("reporag-*.py")):
+        dest = hooks_dir / hook_file.name
+        shutil.copy2(hook_file, dest)
+        dest.chmod(0o755)
+        installed.append(dest)
+        print(f"  copied → {dest}")
+
+    if not installed:
+        print("No hook scripts found.")
+        return
+
+    settings_path = claude_dir / "settings.json"
+    try:
+        settings: dict = json.loads(settings_path.read_text()) if settings_path.exists() else {}
+    except json.JSONDecodeError:
+        settings = {}
+
+    hooks_cfg = settings.setdefault("hooks", {})
+    up_hooks: list = hooks_cfg.setdefault("UserPromptSubmit", [])
+
+    for dest in installed:
+        command = f"python3 {dest}"
+        already = any(
+            h.get("hooks", [{}])[0].get("command") == command
+            for h in up_hooks
+        )
+        if not already:
+            up_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": command}]})
+
+    settings_path.write_text(json.dumps(settings, indent=2))
+    print(f"  updated → {settings_path}")
+    print("\nDone. Restart Claude Code to activate hooks.")
+
+
 def main() -> None:
+    import sys
+
+    if len(sys.argv) > 1 and sys.argv[1] not in ("-h", "--help"):
+        cmd = sys.argv[1]
+        if cmd == "status":
+            _cmd_status()
+            return
+        if cmd == "setup-hooks":
+            _cmd_setup_hooks()
+            return
+
     asyncio.run(_serve())
 
 
