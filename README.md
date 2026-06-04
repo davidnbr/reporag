@@ -30,13 +30,13 @@ Metric: fraction of queries where the exact chunk appears in top-k (Recall@k), p
 
 ### reporag (small, 246 chunks, AST strategy)
 
-| Stage      | Recall@5 | Recall@10 | MRR@10 | ms/query |
-|------------|----------|-----------|--------|----------|
-| dense      | 0.875    | 0.900     | 0.791  | 6        |
-| bm25       | 0.875    | 0.875     | 0.765  | <1       |
-| rrf        | 0.875    | 0.925     | 0.778  | 6        |
-| rrf + ppr  | 0.875    | 0.925     | 0.768  | 8        |
-| **full**   | **0.900**| **0.900** |**0.814**| 430     |
+| Stage     | Recall@5  | Recall@10 | MRR@10    | ms/query |
+| --------- | --------- | --------- | --------- | -------- |
+| dense     | 0.875     | 0.900     | 0.791     | 6        |
+| bm25      | 0.875     | 0.875     | 0.765     | <1       |
+| rrf       | 0.875     | 0.925     | 0.778     | 6        |
+| rrf + ppr | 0.875     | 0.925     | 0.768     | 8        |
+| **full**  | **0.900** | **0.900** | **0.814** | 430      |
 
 `full` = RRF fusion → Reverse PPR hub re-ranking → cross-encoder rerank.
 Reranker cost (~430 ms) trades latency for top-1 precision; disable with `rerank=false` in `query_code`.
@@ -46,7 +46,7 @@ Reranker cost (~430 ms) trades latency for top-1 precision; disable with `rerank
 Validates chunking strategy at scale. PPR requires a dense dependency graph to help — sparse heuristic graphs (857 edges / 11k chunks) show no benefit or slight regression.
 
 | Stage     | Strategy | Recall@5 | Recall@10 | MRR@10 | ms/query |
-|-----------|----------|----------|-----------|--------|----------|
+| --------- | -------- | -------- | --------- | ------ | -------- |
 | dense     | ast      | 0.770    | 0.790     | 0.625  | 35       |
 | dense     | hybrid   | 0.690    | 0.740     | 0.574  | 37       |
 | bm25      | ast      | 0.610    | 0.660     | 0.497  | 1        |
@@ -58,9 +58,10 @@ Validates chunking strategy at scale. PPR requires a dense dependency graph to h
 
 AST consistently outperforms hybrid by 5–7 pp on R@10 for **named-symbol queries** (e.g. "implementation of QuerySet"). Hybrid window chunks dilute the dense vector space when exact AST chunks compete against overlapping windows.
 
-**Benchmark caveat:** both tables measure exact named-chunk recall — structurally biased toward AST. The cited paper (arXiv:2605.04763) where sliding window wins tests *code completion at cursor positions*, not NL→code architectural queries. For queries like "how does the ORM query execution flow work?" or "where is middleware processing defined?", hybrid may outperform AST by providing import context and cross-function windows that AST drops — this is untested.
+**Benchmark caveat:** both tables measure exact named-chunk recall — structurally biased toward AST. The cited paper (arXiv:2605.04763) where sliding window wins tests _code completion at cursor positions_, not NL→code architectural queries. For queries like "how does the ORM query execution flow work?" or "where is middleware processing defined?", hybrid may outperform AST by providing import context and cross-function windows that AST drops — this is untested.
 
 Choose your strategy:
+
 - `"ast"` (default) — best for symbol lookup, exact function/class retrieval, smaller index, lower latency
 - `"hybrid"` — may improve architectural/contextual queries at the cost of 5–7 pp recall regression on symbol lookup and ~2× indexing latency
 - `"sliding"` — pure windows, no symbol-level precision
@@ -73,6 +74,46 @@ devenv shell -- python scripts/benchmark.py --samples 100 --k 5 10
 devenv shell -- python scripts/benchmark.py --project /path/to/project --stages dense rrf full
 # functions only, quiet output:
 devenv shell -- python scripts/benchmark.py --filter-chunk-types function --quiet
+```
+
+### LLM response quality (downstream impact)
+
+Retrieval recall measures _whether_ the right chunk is returned. This benchmark measures _whether Claude gives a better answer_ when that chunk is injected as context.
+
+**Method:** For each sampled function/class, generate a question (`"How does {name} work?"`), call Claude twice — once with no context (baseline), once with retrieved chunks injected (RAG) — then use Claude as judge to score both responses on correctness, completeness, and hallucination avoidance (1–5 each). Scores use `claude -p` (Claude Code CLI, no API key required).
+
+#### reporag (39 files, 266 chunks, 17/30 samples scored)
+
+| Metric        | Baseline | RAG      | Δ (%)     |
+| ------------- | -------- | -------- | --------- |
+| correctness   | 4.18     | 4.29     | +2.8%     |
+| completeness  | 3.94     | 4.24     | +7.5%     |
+| hallucination | 3.82     | 3.94     | +3.1%     |
+| **composite** | **3.98** | **4.16** | **+4.4%** |
+
+Small improvement: reporag uses well-known patterns (MCP, Python, RAG) Claude partially knows from training. RAG helps most on completeness — the actual source code makes answers more thorough.
+
+#### **bigger codebase** (74 files, 488 chunks, 30/30 samples scored)
+
+| Metric        | Baseline | RAG      | Δ (%)       |
+| ------------- | -------- | -------- | ----------- |
+| correctness   | 1.27     | 3.57     | **+181.6%** |
+| completeness  | 1.13     | 3.53     | **+211.8%** |
+| hallucination | 4.33     | 4.43     | +2.3%       |
+| **composite** | **2.24** | **3.84** | **+71.3%**  |
+
+Dramatic improvement on an unfamiliar codebase. Baseline correctness/completeness near 1 (Claude cannot answer without context). Hallucination already high at baseline — Claude hedges rather than inventing. RAG context raises response quality by ~2.5× on correctness and completeness.
+
+**Takeaway:** reporag's retrieval quality improvement (+4.4%) is modest on well-known codebases where Claude has prior knowledge. On private or domain-specific codebases, the impact is **+71% composite** — the core use case.
+
+Run the LLM quality benchmark on your own codebase:
+
+```bash
+# index first
+reporag index_codebase path=/path/to/project
+
+# run eval (uses claude -p — requires Claude Code CLI, no API key)
+devenv shell -- python scripts/llm_eval.py --project /path/to/project --samples 30 --output results.json
 ```
 
 ## Install (any machine)
@@ -88,10 +129,10 @@ MCP clients then launch the server automatically via `uvx`. No manual install st
 
 Two install variants:
 
-| Extra | Torch | First-run download | Use when |
-|-------|-------|--------------------|----------|
-| `[ml]` | CUDA | ~2 GB | NVIDIA GPU available |
-| `[ml-cpu]` | CPU-only | ~250 MB | No GPU / most developer machines |
+| Extra      | Torch    | First-run download | Use when                         |
+| ---------- | -------- | ------------------ | -------------------------------- |
+| `[ml]`     | CUDA     | ~2 GB              | NVIDIA GPU available             |
+| `[ml-cpu]` | CPU-only | ~250 MB            | No GPU / most developer machines |
 
 `[ml-cpu]` uses `[tool.uv.sources]` to redirect torch to the PyTorch CPU index — **requires uv** (ignored by pip). reporag runs purely on CPU regardless; the embed models fit in RAM and latency is acceptable.
 
@@ -128,7 +169,11 @@ Same format as above.
 ```json
 {
   "command": "uvx",
-  "args": ["--from", "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git", "reporag"],
+  "args": [
+    "--from",
+    "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git",
+    "reporag"
+  ],
   "env": { "REPORAG_DATA_DIR": "~/.local/share/reporag" }
 }
 ```
@@ -136,22 +181,33 @@ Same format as above.
 ## Tools
 
 ### `index_codebase`
+
 Parse, embed, and graph-index a project. Run once, then incrementally on changes.
 
 ```json
-{ "path": "/path/to/project", "incremental": true, "languages": ["go", "python"] }
+{
+  "path": "/path/to/project",
+  "incremental": true,
+  "languages": ["go", "python"]
+}
 ```
 
 ### `query_code`
+
 Hybrid RAG retrieval: dense + BM25 + RRF + PPR + cross-encoder rerank.
 
 ```json
-{ "query": "how does authentication work", "k": 10, "project": "/path/to/project" }
+{
+  "query": "how does authentication work",
+  "k": 10,
+  "project": "/path/to/project"
+}
 ```
 
 Use `project` to restrict results to a single codebase when multiple are indexed.
 
 ### `get_symbol`
+
 Exact symbol lookup by name.
 
 ```json
@@ -159,6 +215,7 @@ Exact symbol lookup by name.
 ```
 
 ### `remember` / `recall`
+
 Persistent knowledge store across sessions.
 
 ```json
@@ -198,23 +255,23 @@ Config file: `~/.config/reporag/config.json` (optional — all fields have defau
 
 ### Environment variable overrides
 
-| Variable | Field |
-|----------|-------|
-| `REPORAG_DATA_DIR` | `data_dir` |
-| `REPORAG_EMBED_MODEL` | `embed_model` |
-| `REPORAG_EMBED_BACKEND` | `embed_backend` |
-| `REPORAG_RERANKER_K` | `reranker_k` |
-| `REPORAG_RERANK_BY_DEFAULT` | `rerank_by_default` |
-| `REPORAG_CHUNK_STRATEGY` | `chunk_strategy` |
-| `REPORAG_CHUNK_WINDOW_LINES` | `chunk_window_lines` |
+| Variable                      | Field                 |
+| ----------------------------- | --------------------- |
+| `REPORAG_DATA_DIR`            | `data_dir`            |
+| `REPORAG_EMBED_MODEL`         | `embed_model`         |
+| `REPORAG_EMBED_BACKEND`       | `embed_backend`       |
+| `REPORAG_RERANKER_K`          | `reranker_k`          |
+| `REPORAG_RERANK_BY_DEFAULT`   | `rerank_by_default`   |
+| `REPORAG_CHUNK_STRATEGY`      | `chunk_strategy`      |
+| `REPORAG_CHUNK_WINDOW_LINES`  | `chunk_window_lines`  |
 | `REPORAG_CHUNK_OVERLAP_LINES` | `chunk_overlap_lines` |
-| `REPORAG_BM25_K1` | `bm25_k1` |
-| `REPORAG_BM25_B` | `bm25_b` |
-| `REPORAG_RRF_K` | `rrf_k` |
-| `REPORAG_PPR_ALPHA` | `ppr_alpha` |
-| `REPORAG_DENSE_CANDIDATES` | `dense_candidates` |
-| `REPORAG_SPARSE_CANDIDATES` | `sparse_candidates` |
-| `REPORAG_SNIPPET_CHARS` | `snippet_chars` |
+| `REPORAG_BM25_K1`             | `bm25_k1`             |
+| `REPORAG_BM25_B`              | `bm25_b`              |
+| `REPORAG_RRF_K`               | `rrf_k`               |
+| `REPORAG_PPR_ALPHA`           | `ppr_alpha`           |
+| `REPORAG_DENSE_CANDIDATES`    | `dense_candidates`    |
+| `REPORAG_SPARSE_CANDIDATES`   | `sparse_candidates`   |
+| `REPORAG_SNIPPET_CHARS`       | `snippet_chars`       |
 
 ## Optional: SCIP CLIs (compiler-grade dependency graph)
 
