@@ -41,12 +41,11 @@ try:
             pass
 
     # Find the longest matching indexed project for cwd (path-aware, not string prefix)
-    from pathlib import Path as _Path
-    _cwd = _Path(cwd)
+    _cwd = Path(cwd)
     best_proj: str | None = None
     best_info: dict | None = None
     for proj, info in registry.items():
-        _proj = _Path(proj)
+        _proj = Path(proj)
         if (_cwd == _proj or _cwd.is_relative_to(_proj)) and (
             best_proj is None or len(proj) > len(best_proj)
         ):

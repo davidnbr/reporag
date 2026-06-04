@@ -97,7 +97,7 @@ async def _run_index_bg(
 
             from reporag.indexer.graph_builder import build_graph_for_project
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             graph_stats = await loop.run_in_executor(
                 None, build_graph_for_project, root, files, runtime.graph_db
             )

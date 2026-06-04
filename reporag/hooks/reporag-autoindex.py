@@ -29,15 +29,14 @@ try:
         except Exception:
             pass
 
-    from pathlib import Path as _Path
-    _cwd_path = _Path(cwd)
+    _cwd_path = Path(cwd)
 
     # Respect opt-out: .reporag-ignore in project root silences this hook
     if (_cwd_path / ".reporag-ignore").exists():
         sys.exit(0)
 
     is_indexed = any(
-        _cwd_path == _Path(proj) or _cwd_path.is_relative_to(_Path(proj))
+        _cwd_path == Path(proj) or _cwd_path.is_relative_to(Path(proj))
         for proj in registry
     )
 

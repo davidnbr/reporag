@@ -579,7 +579,9 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
             changed = True
 
     if changed:
-        settings_path.write_text(json.dumps(settings, indent=2))
+        tmp = settings_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(settings, indent=2))
+        tmp.replace(settings_path)
         if verbose:
             print(f"  updated → {settings_path}")
 
@@ -652,7 +654,9 @@ def _setup_cursor_impl(cursor_dir: Path, verbose: bool = False) -> bool:
     changed = "reporag" not in servers or servers["reporag"] != _MCP_CONFIG_BLOCK
     servers["reporag"] = _MCP_CONFIG_BLOCK
     if changed:
-        mcp_path.write_text(json.dumps(mcp, indent=2))
+        tmp = mcp_path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(mcp, indent=2))
+        tmp.replace(mcp_path)
         if verbose:
             print(f"  written → {mcp_path}")
     elif verbose:
