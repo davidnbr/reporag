@@ -153,18 +153,23 @@ def _format_context(chunks: list[dict]) -> str:
 # ── Claude calls via claude -p ────────────────────────────────────────────────
 
 
-def _claude(system: str, user: str) -> str:
+def _claude(system: str, user: str, retries: int = 2) -> str:
     """Call Claude Code CLI in print mode. Uses subscription credits, no API key needed."""
     prompt = f"{system}\n\n---\n\n{user}"
-    result = subprocess.run(
-        ["claude", "-p", prompt, "--output-format", "text"],
-        capture_output=True,
-        text=True,
-        timeout=120,
-    )
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr[:300] or "claude -p failed")
-    return result.stdout.strip()
+    for attempt in range(retries + 1):
+        result = subprocess.run(
+            ["claude", "-p", prompt, "--output-format", "text"],
+            capture_output=True,
+            text=True,
+            timeout=180,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+        err = (result.stderr or result.stdout or "no output")[:400]
+        if attempt < retries:
+            time.sleep(5 * (attempt + 1))
+        else:
+            raise RuntimeError(f"claude -p exit={result.returncode}: {err}")
 
 
 # ── Eval ──────────────────────────────────────────────────────────────────────
@@ -280,7 +285,7 @@ def main() -> None:
             print(f"Project : {label}")
             print(f"Samples : {len(chunks)}  k={args.k}")
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             for i, chunk in enumerate(chunks):
                 if not args.quiet:
                     print(f"  [{i + 1:3d}/{len(chunks)}] {chunk['name'][:45]:<45}", end="\r", flush=True)
