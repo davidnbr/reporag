@@ -487,7 +487,7 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
 
 async def _serve() -> None:
     _runtime.initialize()
-    _runtime._loop = asyncio.get_event_loop()
+    _runtime._loop = asyncio.get_running_loop()
     _runtime.index_sem = asyncio.Semaphore(1)  # serialise concurrent index runs
 
     _auto_setup_hooks()
@@ -564,13 +564,14 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
     hooks_cfg = settings.setdefault("hooks", {})
     up_hooks: list = hooks_cfg.setdefault("UserPromptSubmit", [])
 
+    def _hook_command(h: dict) -> str | None:
+        entries = h.get("hooks") or []
+        return entries[0].get("command") if entries else None
+
     changed = False
     for dest in installed:
-        command = f"python3 {dest}"
-        already = any(
-            h.get("hooks", [{}])[0].get("command") == command
-            for h in up_hooks
-        )
+        command = str(dest)
+        already = any(_hook_command(h) == command for h in up_hooks)
         if not already:
             up_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": command}]})
             changed = True
@@ -645,9 +646,12 @@ def _setup_cursor_impl(cursor_dir: Path, verbose: bool = False) -> bool:
     servers = mcp.setdefault("mcpServers", {})
     changed = "reporag" not in servers or servers["reporag"] != _MCP_CONFIG_BLOCK
     servers["reporag"] = _MCP_CONFIG_BLOCK
-    mcp_path.write_text(json.dumps(mcp, indent=2))
-    if verbose:
-        print(f"  written → {mcp_path}")
+    if changed:
+        mcp_path.write_text(json.dumps(mcp, indent=2))
+        if verbose:
+            print(f"  written → {mcp_path}")
+    elif verbose:
+        print(f"  unchanged → {mcp_path}")
 
     # Cursor ≥0.50 global rules dir
     rules_dir = cursor_dir / "rules"

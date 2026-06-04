@@ -29,7 +29,11 @@ try:
         except Exception:
             pass
 
-    is_indexed = any(cwd.startswith(proj.rstrip("/")) for proj in registry)
+    from pathlib import Path as _Path
+    is_indexed = any(
+        _Path(cwd) == _Path(proj) or _Path(cwd).is_relative_to(_Path(proj))
+        for proj in registry
+    )
 
     if not is_indexed:
         print(
