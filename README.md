@@ -82,7 +82,7 @@ Retrieval recall measures _whether_ the right chunk is returned. This benchmark 
 
 **Method:** For each sampled function/class, generate a question (`"How does {name} work?"`), call Claude twice — once with no context (baseline), once with retrieved chunks injected (RAG) — then use Claude as judge to score both responses on correctness, completeness, and hallucination avoidance (1–5 each). Scores use `claude -p` (Claude Code CLI, no API key required).
 
-#### reporag (39 files, 266 chunks, 17/30 samples scored)
+#### reporag **known codebase with small tasks** (39 files, 266 chunks, 17/30 samples scored)
 
 | Metric        | Baseline | RAG      | Δ (%)     |
 | ------------- | -------- | -------- | --------- |
@@ -93,7 +93,7 @@ Retrieval recall measures _whether_ the right chunk is returned. This benchmark 
 
 Small improvement: reporag uses well-known patterns (MCP, Python, RAG) Claude partially knows from training. RAG helps most on completeness — the actual source code makes answers more thorough.
 
-#### **bigger codebase** (74 files, 488 chunks, 30/30 samples scored)
+#### **bigger codebase with larger tasks** (74 files, 488 chunks, 30/30 samples scored)
 
 | Metric        | Baseline | RAG      | Δ (%)       |
 | ------------- | -------- | -------- | ----------- |
