@@ -46,11 +46,20 @@ async def run(
         return {"error": f"Path does not exist: {root}"}
 
     root_str = str(root)
-    safe = root_str.replace("'", "''")
+    # LanceDB WHERE pre-filters for performance; Python startswith is authoritative
+    # (LIKE treats _ and % as wildcards — paths containing either would silently mismatch)
+    _sql_safe = root_str.replace("'", "''")
 
     # ── chunks from LanceDB ──────────────────────────────────────────────────
     runtime.dense._open_or_create_table()
-    rows = runtime.dense._table.search().where(f"file_path LIKE '{safe}%'").limit(50000).to_list()
+    rows = [
+        r
+        for r in runtime.dense._table.search()
+        .where(f"file_path LIKE '{_sql_safe}%'")
+        .limit(50000)
+        .to_list()
+        if (r.get("file_path") or "").startswith(root_str)
+    ]
 
     if not rows:
         return {"error": "No chunks indexed for this project. Run index_codebase first."}
