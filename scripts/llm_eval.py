@@ -100,13 +100,15 @@ def _get_named_chunks(
     rt: Any, project: str | None, max_samples: int, seed: int
 ) -> list[dict]:
     rt.dense._open_or_create_table()
-    rows = rt.dense._table.search().limit(max_samples * 20).to_list()
+    q = rt.dense._table.search()
+    if project:
+        safe = project.replace("'", "''")
+        q = q.where(f"file_path LIKE '{safe}%'", prefilter=True)
+    rows = q.limit(max_samples * 50).to_list()
     named = [
         r
         for r in rows
-        if r.get("name")
-        and r.get("chunk_type") in _CHUNK_TYPES
-        and (not project or r.get("file_path", "").startswith(project))
+        if r.get("name") and r.get("chunk_type") in _CHUNK_TYPES
     ]
     if len(named) > max_samples:
         rng = random.Random(seed)
