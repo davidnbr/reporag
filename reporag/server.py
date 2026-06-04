@@ -516,7 +516,7 @@ def _cmd_status() -> None:
 
     if args.project:
         info = get(args.project)
-        result: dict = info or {"chunks": 0, "files": 0, "indexed": False}
+        result: dict = dict(info) if info else {"chunks": 0, "files": 0, "indexed": False}
         result["project"] = args.project
         result.setdefault("indexed", info is not None)
     else:
@@ -541,11 +541,14 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
     installed: list[Path] = []
     for hook_file in sorted(pkg_hooks.glob("reporag-*.py")):
         dest = hooks_dir / hook_file.name
-        shutil.copy2(hook_file, dest)
-        dest.chmod(0o755)
+        if not dest.exists() or hook_file.stat().st_mtime > dest.stat().st_mtime:
+            shutil.copy2(hook_file, dest)
+            dest.chmod(0o755)
+            if verbose:
+                print(f"  copied → {dest}")
+        elif verbose:
+            print(f"  up-to-date → {dest}")
         installed.append(dest)
-        if verbose:
-            print(f"  copied → {dest}")
 
     if not installed:
         return False

@@ -30,15 +30,22 @@ try:
             pass
 
     from pathlib import Path as _Path
+    _cwd_path = _Path(cwd)
+
+    # Respect opt-out: .reporag-ignore in project root silences this hook
+    if (_cwd_path / ".reporag-ignore").exists():
+        sys.exit(0)
+
     is_indexed = any(
-        _Path(cwd) == _Path(proj) or _Path(cwd).is_relative_to(_Path(proj))
+        _cwd_path == _Path(proj) or _cwd_path.is_relative_to(_Path(proj))
         for proj in registry
     )
 
     if not is_indexed:
         print(
             f"[reporag] {cwd} has not been indexed yet. "
-            f'Call index_codebase with path="{cwd}" to enable code search and retrieval.'
+            f'Call index_codebase with path="{cwd}" to enable code search and retrieval. '
+            f"(Create .reporag-ignore to silence this.)"
         )
 except Exception:
     pass  # never break Claude Code

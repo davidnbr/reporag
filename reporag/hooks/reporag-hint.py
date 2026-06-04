@@ -14,20 +14,20 @@ import re
 import sys
 from pathlib import Path
 
-# Prompts that are likely asking about the codebase
+# Specific code-domain signals — intentionally excludes generic words (add, use, show, does)
 _CODE_RE = re.compile(
-    r"\b(how|what|where|explain|implement|show|find|why|does|work|trace|debug|"
-    r"bug|error|fix|test|refactor|add|create|update|call|return|class|function|"
-    r"method|module|import|define|declare|use|change|remove|rename)\b",
+    r"\b(explain|implement|trace|debug|bug|error|fix|refactor|function|"
+    r"method|module|define|declare|rename|import|class|return|test)\b",
     re.IGNORECASE,
 )
+_MIN_PROMPT_LEN = 20
 
 try:
     data = json.load(sys.stdin)
     prompt: str = data.get("prompt", "")
     cwd: str = data.get("cwd", "").rstrip("/")
 
-    if not cwd or len(prompt) < 8 or not _CODE_RE.search(prompt):
+    if not cwd or len(prompt) < _MIN_PROMPT_LEN or not _CODE_RE.search(prompt):
         sys.exit(0)
 
     data_dir = Path(os.environ.get("REPORAG_DATA_DIR", "~/.local/share/reporag")).expanduser()
