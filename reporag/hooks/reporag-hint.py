@@ -55,8 +55,12 @@ try:
     if best_proj and best_info:
         chunks = best_info.get("chunks", 0)
         print(
-            f"[reporag] {best_proj} is indexed ({chunks:,} chunks). "
-            f"Use query_code to retrieve relevant context before answering."
+            f"[reporag] {best_proj} is indexed ({chunks:,} chunks) — USE IT before answering, "
+            f"don't guess from training data: query_code (semantic search for relevant snippets), "
+            f"get_symbol (jump to a function/class def + refs), get_architecture (module/dependency "
+            f"overview), ask_project (natural-language Q&A grounded in the indexed code), "
+            f"summarize_project (high-level summary). Pick the one matching the question; "
+            f"grounding in real code beats a plausible-sounding guess."
         )
 except Exception:
     pass  # never break Claude Code

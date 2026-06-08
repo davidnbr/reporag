@@ -42,9 +42,13 @@ try:
 
     if not is_indexed:
         print(
-            f"[reporag] {cwd} has not been indexed yet. "
-            f'Call index_codebase with path="{cwd}" to enable code search and retrieval. '
-            f"(Create .reporag-ignore to silence this.)"
+            f"[reporag] ACTION: {cwd} is unindexed — call index_codebase(path=\"{cwd}\") "
+            f"now, before doing anything else. It runs in the background (first results "
+            f"in seconds, check via index_status), so starting it costs nothing. Once "
+            f"indexed, ground answers in real code with query_code / get_symbol / "
+            f"get_architecture / ask_project instead of guessing — that's the difference "
+            f"between a correct answer and a plausible-sounding one. "
+            f"(Create .reporag-ignore in project root to silence this.)"
         )
 except Exception:
     pass  # never break Claude Code
