@@ -10,24 +10,14 @@ No ML imports — reads only the lightweight projects.json registry.
 """
 import json
 import os
-import re
 import sys
 from pathlib import Path
 
-# Specific code-domain signals — intentionally excludes generic words (add, use, show, does)
-_CODE_RE = re.compile(
-    r"\b(explain|implement|trace|debug|bug|error|fix|refactor|function|"
-    r"method|module|define|declare|rename|import|class|return|test)\b",
-    re.IGNORECASE,
-)
-_MIN_PROMPT_LEN = 20
-
 try:
     data = json.load(sys.stdin)
-    prompt: str = data.get("prompt", "")
     cwd: str = data.get("cwd", "").rstrip("/")
 
-    if not cwd or len(prompt) < _MIN_PROMPT_LEN or not _CODE_RE.search(prompt):
+    if not cwd:
         sys.exit(0)
 
     data_dir = Path(os.environ.get("REPORAG_DATA_DIR", "~/.local/share/reporag")).expanduser()

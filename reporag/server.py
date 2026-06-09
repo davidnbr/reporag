@@ -130,7 +130,7 @@ class Runtime:
     index_tasks: dict[str, IndexTask] = field(default_factory=dict)
     watched_projects: set[str] = field(default_factory=set)
     _watcher: Any = None  # watchdog Observer
-    _watcher_handlers: dict[str, Any] = field(default_factory=dict)  # project → handler
+    _watcher_handlers: dict[str, Any] = field(default_factory=dict)  # project -> handler
     _loop: Any = None
     index_sem: Any = None  # asyncio.Semaphore — prevents concurrent index runs
 
@@ -538,20 +538,15 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
     hooks_dir = claude_dir / "hooks"
     hooks_dir.mkdir(parents=True, exist_ok=True)
 
-    installed: list[Path] = []
     for hook_file in sorted(pkg_hooks.glob("reporag-*.py")):
         dest = hooks_dir / hook_file.name
         if not dest.exists() or hook_file.stat().st_mtime > dest.stat().st_mtime:
             shutil.copy2(hook_file, dest)
             dest.chmod(0o755)
             if verbose:
-                print(f"  copied → {dest}")
+                print(f"  copied: {dest}")
         elif verbose:
-            print(f"  up-to-date → {dest}")
-        installed.append(dest)
-
-    if not installed:
-        return False
+            print(f"  up-to-date: {dest}")
 
     settings_path = claude_dir / "settings.json"
     try:
@@ -567,23 +562,56 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
     hooks_cfg = settings.setdefault("hooks", {})
     up_hooks: list = hooks_cfg.setdefault("UserPromptSubmit", [])
 
-    def _hook_commands(h: dict) -> list[str]:
+    def _entry_commands(h: dict) -> list[str]:
         return [e.get("command", "") for e in (h.get("hooks") or [])]
 
+    def _entry_mcp_tools(h: dict) -> list[str]:
+        return [
+            e.get("tool", "")
+            for e in (h.get("hooks") or [])
+            if e.get("type") == "mcp_tool"
+        ]
+
     changed = False
-    for dest in installed:
-        command = str(dest)
-        already = any(command in _hook_commands(h) for h in up_hooks)
-        if not already:
-            up_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": command}]})
-            changed = True
+
+    # Remove stale reporag-autoindex.py command entries (replaced by mcp_tool below)
+    autoindex_script = str(hooks_dir / "reporag-autoindex.py")
+    before = len(up_hooks)
+    up_hooks[:] = [h for h in up_hooks if autoindex_script not in _entry_commands(h)]
+    if len(up_hooks) < before:
+        changed = True
+        if verbose:
+            print("  removed stale reporag-autoindex.py command hook")
+
+    # Add mcp_tool hook for index_codebase (runs directly — no Claude cooperation needed)
+    if not any("index_codebase" in _entry_mcp_tools(h) for h in up_hooks):
+        up_hooks.append({
+            "matcher": ".*",
+            "hooks": [{
+                "type": "mcp_tool",
+                "server": "reporag",
+                "tool": "index_codebase",
+                "input": {"path": "${cwd}"},
+            }],
+        })
+        changed = True
+        if verbose:
+            print("  added mcp_tool hook: index_codebase")
+
+    # Add command hook for reporag-hint.py (injects context into Claude's window)
+    hint_script = str(hooks_dir / "reporag-hint.py")
+    if not any(hint_script in _entry_commands(h) for h in up_hooks):
+        up_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": hint_script}]})
+        changed = True
+        if verbose:
+            print(f"  added command hook: {hint_script}")
 
     if changed:
         tmp = settings_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(settings, indent=2))
         tmp.replace(settings_path)
         if verbose:
-            print(f"  updated → {settings_path}")
+            print(f"  updated: {settings_path}")
 
     return changed
 
@@ -658,9 +686,9 @@ def _setup_cursor_impl(cursor_dir: Path, verbose: bool = False) -> bool:
         tmp.write_text(json.dumps(mcp, indent=2))
         tmp.replace(mcp_path)
         if verbose:
-            print(f"  written → {mcp_path}")
+            print(f"  written: {mcp_path}")
     elif verbose:
-        print(f"  unchanged → {mcp_path}")
+        print(f"  unchanged: {mcp_path}")
 
     # Cursor ≥0.50 global rules dir
     rules_dir = cursor_dir / "rules"
@@ -672,10 +700,10 @@ def _setup_cursor_impl(cursor_dir: Path, verbose: bool = False) -> bool:
             + _CURSORRULES_SNIPPET
         )
         if verbose:
-            print(f"  written → {rules_path}")
+            print(f"  written: {rules_path}")
         changed = True
     elif verbose:
-        print(f"  exists  → {rules_path} (not overwritten)")
+        print(f"  exists: {rules_path} (not overwritten)")
 
     if verbose:
         print(

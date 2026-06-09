@@ -14,7 +14,7 @@ from reporag.server import _setup_cursor_impl, _setup_hooks_impl
 # ── helpers ──────────────────────────────────────────────────────────────────
 
 def _fake_hooks_dir(tmp_path: Path) -> Path:
-    """Create tmp_path/reporag/hooks with one hook script.
+    """Create tmp_path/reporag/hooks with reporag-hint.py and reporag-autoindex.py.
 
     Returns the package dir so callers can set __file__ = pkg / "server.py",
     making Path(__file__).parent / "hooks" resolve to the real hooks dir.
@@ -23,9 +23,10 @@ def _fake_hooks_dir(tmp_path: Path) -> Path:
     pkg.mkdir()
     hooks = pkg / "hooks"
     hooks.mkdir()
-    hook = hooks / "reporag-test.py"
-    hook.write_text("#!/usr/bin/env python3\nimport sys; sys.exit(0)\n")
-    hook.chmod(0o755)
+    for name in ("reporag-hint.py", "reporag-autoindex.py"):
+        hook = hooks / name
+        hook.write_text("#!/usr/bin/env python3\nimport sys; sys.exit(0)\n")
+        hook.chmod(0o755)
     return pkg
 
 
@@ -39,10 +40,20 @@ def test_hooks_impl_installs_to_claude_dir(tmp_path, monkeypatch):
 
     _setup_hooks_impl(claude_dir, verbose=False)
 
-    assert (claude_dir / "hooks" / "reporag-test.py").exists()
+    assert (claude_dir / "hooks" / "reporag-hint.py").exists()
+    assert (claude_dir / "hooks" / "reporag-autoindex.py").exists()
     settings = json.loads((claude_dir / "settings.json").read_text())
     hooks_cfg = settings["hooks"]["UserPromptSubmit"]
-    assert any("reporag-test.py" in str(h) for h in hooks_cfg)
+    # mcp_tool entry for index_codebase (replaces old autoindex command hook)
+    assert any(
+        e.get("type") == "mcp_tool" and e.get("tool") == "index_codebase"
+        for h in hooks_cfg
+        for e in (h.get("hooks") or [])
+    )
+    # command entry for reporag-hint.py
+    assert any("reporag-hint.py" in str(h) for h in hooks_cfg)
+    # reporag-autoindex.py must NOT be wired as a command hook
+    assert not any("reporag-autoindex.py" in str(h) for h in hooks_cfg)
 
 
 def test_hooks_impl_idempotent(tmp_path, monkeypatch):
@@ -232,7 +243,7 @@ def test_hint_hook_fires_on_code_prompt_indexed(tmp_path):
     assert "285" in out
 
 
-def test_hint_hook_silent_for_short_prompt(tmp_path):
+def test_hint_hook_fires_for_short_prompt(tmp_path):
     registry = {"/home/user/myproject": {"chunks": 285, "files": 39}}
     (tmp_path / "projects.json").write_text(json.dumps(registry))
     out = _run_hook(
@@ -240,10 +251,10 @@ def test_hint_hook_silent_for_short_prompt(tmp_path):
         {"cwd": "/home/user/myproject", "prompt": "fix it"},
         {"REPORAG_DATA_DIR": str(tmp_path)},
     )
-    assert out == ""
+    assert "query_code" in out
 
 
-def test_hint_hook_silent_for_non_code_prompt(tmp_path):
+def test_hint_hook_fires_for_non_code_prompt(tmp_path):
     registry = {"/home/user/myproject": {"chunks": 285, "files": 39}}
     (tmp_path / "projects.json").write_text(json.dumps(registry))
     out = _run_hook(
@@ -251,7 +262,7 @@ def test_hint_hook_silent_for_non_code_prompt(tmp_path):
         {"cwd": "/home/user/myproject", "prompt": "please add a comma after the word hello there"},
         {"REPORAG_DATA_DIR": str(tmp_path)},
     )
-    assert out == ""
+    assert "query_code" in out
 
 
 def test_hint_hook_no_sibling_collision(tmp_path):
