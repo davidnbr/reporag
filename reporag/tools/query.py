@@ -91,6 +91,10 @@ async def run(
     # ── 6. Fetch full chunk records ─────────────────────────────────────────
     candidates = runtime.dense.get_chunks(candidate_ids)
 
+    # Restore merged score order (get_chunks returns DB scan order, not ranked order)
+    id_rank = {doc_id: i for i, doc_id in enumerate(candidate_ids)}
+    candidates.sort(key=lambda c: id_rank.get(c.get("id", ""), len(candidate_ids)))
+
     # Apply filters
     if lang_filter:
         candidates = [c for c in candidates if c.get("language") in lang_filter]

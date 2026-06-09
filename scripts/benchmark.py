@@ -135,6 +135,23 @@ def _stage_full(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
         ppr_scores = reverse_personalized_pagerank(rt.graph, seeds, alpha=0.85, top_k=k * 3)
 
     merged = merge_rrf_ppr(fused, ppr_scores)
+    return list(merged.keys())[:k]
+
+
+def _stage_full_rerank(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
+    from reporag.retrieval.pagerank import merge_rrf_ppr, reverse_personalized_pagerank
+    from reporag.retrieval.rrf import rrf_fuse, top_k
+
+    dense_ids = rt.dense.search(q_vec, k=50)
+    sparse_ids = rt.bm25.search(query, k=50) if rt.bm25.is_ready else []
+    fused = rrf_fuse([dense_ids, sparse_ids], k=60)
+
+    ppr_scores: dict[str, float] = {}
+    if rt.graph is not None and rt.graph.number_of_nodes() > 0:
+        seeds = [doc_id for doc_id, _ in top_k(fused, 20)]
+        ppr_scores = reverse_personalized_pagerank(rt.graph, seeds, alpha=0.85, top_k=k * 3)
+
+    merged = merge_rrf_ppr(fused, ppr_scores)
     candidate_ids = list(merged.keys())[: k * 3]
     candidates = rt.dense.get_chunks(candidate_ids)
 
@@ -150,6 +167,7 @@ _STAGES: dict[str, Any] = {
     "rrf": _stage_rrf,
     "rrf+ppr": _stage_rrf_ppr,
     "full": _stage_full,
+    "full+rerank": _stage_full_rerank,
 }
 
 
@@ -259,13 +277,17 @@ def main() -> None:
     print()
 
     # Summary: improvement of full vs dense at largest k
+    k = max(args.k)
     if "full" in args.stages and "dense" in args.stages:
-        k = max(args.k)
         r_full, _ = _recall_mrr(results["full"][k], k)
         r_dense, _ = _recall_mrr(results["dense"][k], k)
         delta = r_full - r_dense
-        sign = "+" if delta >= 0 else ""
-        print(f"Full pipeline vs dense-only Recall@{k}: {sign}{delta:+.3f}")
+        print(f"Full pipeline vs dense-only Recall@{k}: {delta:+.3f}")
+    if "full+rerank" in args.stages and "full" in args.stages:
+        r_rerank, _ = _recall_mrr(results["full+rerank"][k], k)
+        r_full, _ = _recall_mrr(results["full"][k], k)
+        delta = r_rerank - r_full
+        print(f"Reranker impact on full pipeline Recall@{k}: {delta:+.3f}")
 
 
 if __name__ == "__main__":
