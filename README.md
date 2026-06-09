@@ -134,6 +134,43 @@ Run on your own codebase:
 devenv shell -- python scripts/llm_eval.py --project /path/to/project --samples 30 --output results.json
 ```
 
+### Discovery mode (anti-duplication)
+
+The benchmarks above test **named-symbol lookup** — Claude already knows what it's looking for ("how does `selfCorrectLoop` work"). The real failure mode in multi-file features is the opposite: Claude doesn't know a function/pattern already exists, so it reimplements it.
+
+**Method:** strip the function name from `semantic_text`, leaving only the description (parameters/docstring). Use that as the query — simulates "I need to implement X" without knowing any names. Grep can't help here (no name to search for); semantic retrieval is the only option.
+
+**Retrieval recall** (private Go project, 488 chunks, 50 samples):
+
+| Stage          | Recall@5 | Recall@10 | MRR@10 | ms/query |
+| -------------- | -------- | --------- | ------ | -------- |
+| grep-discovery | 0.660    | 0.760     | 0.390  | 1598.7   |
+| dense          | 1.000    | 1.000     | 0.911  | 88.3     |
+| bm25           | 1.000    | 1.000     | 0.910  | 13.7     |
+| **full**       | **1.000**| **1.000** | 0.907  | 120.8    |
+
+RAG vs grep-discovery Recall@10: **+0.240**. Grep word-overlap on raw content gets close (0.76) but is 16x slower and misses 1 in 4. RAG hits every case.
+
+**LLM response quality** (same project, 5 samples → 15 `claude -p` calls):
+
+| Metric        | Baseline | RAG      | Δ (%)      |
+| ------------- | -------- | -------- | ---------- |
+| correctness   | 1.00     | 4.20     | +320.0%    |
+| completeness  | 1.20     | 4.00     | +233.3%    |
+| hallucination | 3.20     | 5.00     | +56.2%     |
+| **composite** | **1.80** | **4.40** | **+144.4%**|
+
+4/5 samples: baseline either refused, hallucinated the wrong language, or invented a different implementation. RAG returned the **exact existing function verbatim with file:line location**, ready to import instead of reimplement. The 1 miss was a query with no real signal (`"Parameters: result types.ExecutionResult."` — no docstring, no useful description).
+
+**Caveat:** queries are derived from `semantic_text` (leave-one-out), so this is optimistic vs. true unknown-unknowns — it validates the embedding space is dense enough for description→code retrieval, not a blind real-world test. n=5 for the LLM eval is small.
+
+**Takeaway:** when Claude is told "before writing new code, call `find_existing(task=...)`," semantic retrieval reliably surfaces existing implementations from a one-sentence description — the core anti-duplication use case.
+
+```bash
+devenv shell -- python scripts/benchmark.py --project /path/to/project --mode discovery --samples 50
+devenv shell -- python scripts/llm_eval.py --project /path/to/project --mode discovery --samples 5 --output results.json
+```
+
 ## Install (any machine)
 
 **Prerequisites:** [`uv`](https://docs.astral.sh/uv/getting-started/installation/) — single binary, no Python required upfront.
@@ -243,6 +280,20 @@ Hybrid RAG retrieval: dense + BM25 + RRF + PPR + cross-encoder rerank.
 ```
 
 Use `project` to restrict results to a single codebase when multiple are indexed.
+
+### `find_existing`
+
+Pre-implementation discovery — call before writing new code to surface existing functions/classes that already handle the task. Same hybrid pipeline as `query_code` (no reranker), deduplicated by file (max 2/file), with `reuse_hint` explaining why each result is relevant.
+
+```json
+{
+  "task": "validate API error codes and map them to user-facing messages",
+  "project": "/path/to/project",
+  "k": 10
+}
+```
+
+Prevents the "Claude reimplements logic that already exists in another module" failure mode in multi-file features. See [Discovery mode](#discovery-mode-anti-duplication) for benchmark results.
 
 ### `get_symbol`
 

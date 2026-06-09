@@ -43,6 +43,21 @@ _QUESTION_TEMPLATES = [
     "Where is `{name}` defined and what is its purpose?",
 ]
 
+_DISCOVERY_TEMPLATES = [
+    "I need to implement: {description}. Write the code.",
+    "Write a function that: {description}",
+]
+
+_MIN_DESCRIPTION_CHARS = 30
+
+
+def _strip_name_from_semantic(semantic_text: str, name: str) -> str:
+    readable = name.replace("_", " ").replace("-", " ")
+    for prefix in (f"Function {readable}.", f"Method {readable}.", f"Class {readable}."):
+        if semantic_text.startswith(prefix):
+            return semantic_text[len(prefix):].strip()
+    return semantic_text
+
 _SYSTEM_ANSWER = (
     "You are an expert software engineer. Answer questions about codebases concisely "
     "and accurately. If you don't know or aren't sure, say so — do not invent details."
@@ -117,6 +132,31 @@ def _get_named_chunks(
     return named
 
 
+def _get_discovery_chunks(
+    rt: Any, project: str | None, max_samples: int, seed: int
+) -> list[dict]:
+    """Chunks with meaningful semantic_text — supports description-only queries."""
+    rt.dense._open_or_create_table()
+    q = rt.dense._table.search()
+    if project:
+        safe = project.replace("'", "''")
+        q = q.where(f"file_path LIKE '{safe}%'", prefilter=True)
+    rows = q.limit(max_samples * 50).to_list()
+    candidates = []
+    for r in rows:
+        if not r.get("name") or r.get("chunk_type") not in _CHUNK_TYPES:
+            continue
+        desc = _strip_name_from_semantic(r.get("semantic_text", ""), r["name"])
+        if len(desc) >= _MIN_DESCRIPTION_CHARS:
+            r["_description"] = desc
+            candidates.append(r)
+    if len(candidates) > max_samples:
+        rng = random.Random(seed)
+        rng.shuffle(candidates)
+        candidates = candidates[:max_samples]
+    return candidates
+
+
 # ── Retrieval ─────────────────────────────────────────────────────────────────
 
 
@@ -172,6 +212,7 @@ def _claude(system: str, user: str, retries: int = 2) -> str:
             time.sleep(5 * (attempt + 1))
         else:
             raise RuntimeError(f"claude -p exit={result.returncode}: {err}")
+    raise RuntimeError("unreachable")
 
 
 # ── Eval ──────────────────────────────────────────────────────────────────────
@@ -183,9 +224,16 @@ def _eval_one(
     k: int,
     executor: concurrent.futures.ThreadPoolExecutor,
     template_idx: int,
+    mode: str = "named",
 ) -> EvalResult:
     name = chunk["name"]
-    query = _QUESTION_TEMPLATES[template_idx % len(_QUESTION_TEMPLATES)].format(name=name)
+    if mode == "discovery":
+        description = chunk.get("_description", chunk.get("semantic_text", name))
+        query = _DISCOVERY_TEMPLATES[template_idx % len(_DISCOVERY_TEMPLATES)].format(
+            description=description
+        )
+    else:
+        query = _QUESTION_TEMPLATES[template_idx % len(_QUESTION_TEMPLATES)].format(name=name)
 
     # raw_content is actual source code; semantic_text is the embedded description
     ground_truth = (chunk.get("raw_content") or chunk.get("snippet", ""))[:2000]
@@ -253,8 +301,14 @@ def _avg(results: list[EvalResult], condition: str) -> dict[str, float]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="LLM response quality benchmark")
     parser.add_argument("--project", nargs="+", type=str, help="Project root path(s)")
-    parser.add_argument("--samples", type=int, default=30, help="Questions per project")
+    parser.add_argument("--samples", type=int, default=10, help="Questions per project")
     parser.add_argument("--k", type=int, default=10, help="Context chunks for RAG condition")
+    parser.add_argument(
+        "--mode",
+        choices=["named", "discovery"],
+        default="named",
+        help="named: 'how does X work' queries; discovery: description-only, no function name",
+    )
     parser.add_argument("--data-dir", type=str)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=str, help="Save raw results to JSON file")
@@ -276,22 +330,27 @@ def main() -> None:
     projects = args.project or [None]
 
     for project in projects:
-        chunks = _get_named_chunks(rt, project, args.samples, args.seed)
+        if args.mode == "discovery":
+            chunks = _get_discovery_chunks(rt, project, args.samples, args.seed)
+        else:
+            chunks = _get_named_chunks(rt, project, args.samples, args.seed)
         if not chunks:
             label = project or "(all)"
-            print(f"No named chunks for {label}. Run index_codebase first.")
+            print(f"No chunks for {label} in mode={args.mode}. Run index_codebase first.")
             continue
 
         if not args.quiet:
             label = project or "(all indexed projects)"
             print(f"Project : {label}")
+            print(f"Mode    : {args.mode}")
             print(f"Samples : {len(chunks)}  k={args.k}")
+            print(f"Note    : {len(chunks) * 3} claude -p calls total\n")
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             for i, chunk in enumerate(chunks):
                 if not args.quiet:
                     print(f"  [{i + 1:3d}/{len(chunks)}] {chunk['name'][:45]:<45}", end="\r", flush=True)
-                result = _eval_one(chunk, rt, args.k, executor, i)
+                result = _eval_one(chunk, rt, args.k, executor, i, mode=args.mode)
                 all_results.append(result)
                 if result.error and not args.quiet:
                     print(f"\n  ! {chunk['name']}: {result.error}")
