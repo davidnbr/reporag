@@ -6,12 +6,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 from reporag.server import _setup_cursor_impl, _setup_hooks_impl
 
-
 # ── helpers ──────────────────────────────────────────────────────────────────
+
 
 def _fake_hooks_dir(tmp_path: Path) -> Path:
     """Create tmp_path/reporag/hooks with reporag-hint.py and reporag-autoindex.py.
@@ -32,10 +30,12 @@ def _fake_hooks_dir(tmp_path: Path) -> Path:
 
 # ── _setup_hooks_impl ─────────────────────────────────────────────────────────
 
+
 def test_hooks_impl_installs_to_claude_dir(tmp_path, monkeypatch):
     pkg = _fake_hooks_dir(tmp_path)
     claude_dir = tmp_path / "claude"
     import reporag.server as srv
+
     monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
 
     _setup_hooks_impl(claude_dir, verbose=False)
@@ -60,6 +60,7 @@ def test_hooks_impl_idempotent(tmp_path, monkeypatch):
     pkg = _fake_hooks_dir(tmp_path)
     claude_dir = tmp_path / "claude"
     import reporag.server as srv
+
     monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
 
     _setup_hooks_impl(claude_dir)
@@ -78,6 +79,7 @@ def test_hooks_impl_skips_corrupt_json(tmp_path, monkeypatch):
     (claude_dir / "settings.json").write_text("{invalid json{{")
 
     import reporag.server as srv
+
     monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
 
     result = _setup_hooks_impl(claude_dir, verbose=False)
@@ -93,6 +95,7 @@ def test_hooks_impl_preserves_existing_settings(tmp_path, monkeypatch):
     (claude_dir / "settings.json").write_text(json.dumps(existing))
 
     import reporag.server as srv
+
     monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
     _setup_hooks_impl(claude_dir)
 
@@ -111,6 +114,7 @@ def test_hooks_impl_handles_empty_hooks_list_entry(tmp_path, monkeypatch):
     (claude_dir / "settings.json").write_text(json.dumps(settings))
 
     import reporag.server as srv
+
     monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
 
     result = _setup_hooks_impl(claude_dir, verbose=False)
@@ -118,6 +122,7 @@ def test_hooks_impl_handles_empty_hooks_list_entry(tmp_path, monkeypatch):
 
 
 # ── _setup_cursor_impl ────────────────────────────────────────────────────────
+
 
 def test_cursor_impl_writes_mcp_json(tmp_path):
     cursor_dir = tmp_path / ".cursor"
@@ -182,6 +187,7 @@ def test_cursor_impl_does_not_overwrite_existing_rules(tmp_path):
 
 # ── hook scripts (subprocess) ─────────────────────────────────────────────────
 
+
 def _run_hook(script: str, stdin_data: dict, env: dict | None = None) -> str:
     pkg_hooks = Path(__file__).parent.parent / "reporag" / "hooks"
     result = subprocess.run(
@@ -195,7 +201,9 @@ def _run_hook(script: str, stdin_data: dict, env: dict | None = None) -> str:
 
 
 def test_autoindex_hook_silent_when_no_cwd(tmp_path):
-    out = _run_hook("reporag-autoindex.py", {"prompt": "hello"}, {"REPORAG_DATA_DIR": str(tmp_path)})
+    out = _run_hook(
+        "reporag-autoindex.py", {"prompt": "hello"}, {"REPORAG_DATA_DIR": str(tmp_path)}
+    )
     assert out == ""
 
 

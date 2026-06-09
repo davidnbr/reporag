@@ -8,6 +8,7 @@ of answering from training data alone.
 
 No ML imports — reads only the lightweight projects.json registry.
 """
+
 import json
 import os
 import sys
@@ -48,9 +49,21 @@ try:
         # Detect implementation intent from user prompt
         prompt: str = data.get("prompt", "").lower()
         impl_keywords = (
-            "implement", "add ", "create ", "build ", "write a", "write the",
-            "new endpoint", "new view", "new service", "new function", "new class",
-            "new feature", "new handler", "new middleware", "new model",
+            "implement",
+            "add ",
+            "create ",
+            "build ",
+            "write a",
+            "write the",
+            "new endpoint",
+            "new view",
+            "new service",
+            "new function",
+            "new class",
+            "new feature",
+            "new handler",
+            "new middleware",
+            "new model",
         )
         is_impl = any(kw in prompt for kw in impl_keywords)
 

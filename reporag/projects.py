@@ -3,6 +3,7 @@
 Stored at $REPORAG_DATA_DIR/projects.json — read by Claude Code hooks without
 importing any ML dependencies (fast, < 5 ms).
 """
+
 from __future__ import annotations
 
 import json
@@ -17,6 +18,7 @@ _registry_lock = threading.Lock()
 def _registry_path() -> Path:
     try:
         from reporag.config import get_config  # noqa: PLC0415
+
         return Path(get_config().data_dir).expanduser() / "projects.json"
     except ImportError:
         data_dir = os.environ.get("REPORAG_DATA_DIR", "~/.local/share/reporag")

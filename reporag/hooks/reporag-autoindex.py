@@ -8,6 +8,7 @@ call the MCP tool automatically on the next response.
 
 No ML imports — reads only the lightweight projects.json registry.
 """
+
 import json
 import os
 import sys
@@ -36,13 +37,12 @@ try:
         sys.exit(0)
 
     is_indexed = any(
-        _cwd_path == Path(proj) or _cwd_path.is_relative_to(Path(proj))
-        for proj in registry
+        _cwd_path == Path(proj) or _cwd_path.is_relative_to(Path(proj)) for proj in registry
     )
 
     if not is_indexed:
         print(
-            f"[reporag] ACTION: {cwd} is unindexed — call index_codebase(path=\"{cwd}\") "
+            f'[reporag] ACTION: {cwd} is unindexed — call index_codebase(path="{cwd}") '
             f"now, before doing anything else. It runs in the background (first results "
             f"in seconds, check via index_status), so starting it costs nothing. Once "
             f"indexed, ground answers in real code with query_code / get_symbol / "

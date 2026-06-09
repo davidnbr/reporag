@@ -36,7 +36,7 @@ def _strip_name_from_semantic(semantic_text: str, name: str) -> str:
     readable = name.replace("_", " ").replace("-", " ")
     for prefix in (f"Function {readable}.", f"Method {readable}.", f"Class {readable}."):
         if semantic_text.startswith(prefix):
-            return semantic_text[len(prefix):].strip()
+            return semantic_text[len(prefix) :].strip()
     return semantic_text
 
 
@@ -216,10 +216,9 @@ def golden_discovery(runtime: Any) -> list[tuple[str, str]]:
     runtime.dense._open_or_create_table()
     rows = runtime.dense._table.search().limit(_DISCOVERY_SIZE * 10).to_list()
     candidates = [
-        r for r in rows
-        if r.get("name")
-        and r.get("chunk_type") in _CHUNK_TYPES
-        and r.get("semantic_text")
+        r
+        for r in rows
+        if r.get("name") and r.get("chunk_type") in _CHUNK_TYPES and r.get("semantic_text")
     ]
 
     # Only chunks with meaningful description beyond just the name prefix
@@ -230,7 +229,9 @@ def golden_discovery(runtime: Any) -> list[tuple[str, str]]:
             meaningful.append((r, desc))
 
     if len(meaningful) < 5:
-        pytest.skip(f"Too few chunks with meaningful semantic_text ({len(meaningful)}). Index more code first.")
+        pytest.skip(
+            f"Too few chunks with meaningful semantic_text ({len(meaningful)}). Index more code first."
+        )
 
     rng = random.Random(_SEED)
     rng.shuffle(meaningful)

@@ -19,12 +19,12 @@ Requirements:
     pip install anthropic   (or: uv sync --extra dev)
     ANTHROPIC_API_KEY environment variable
 """
+
 from __future__ import annotations
 
 import argparse
 import concurrent.futures
 import json
-import os
 import random
 import shutil
 import subprocess
@@ -55,8 +55,9 @@ def _strip_name_from_semantic(semantic_text: str, name: str) -> str:
     readable = name.replace("_", " ").replace("-", " ")
     for prefix in (f"Function {readable}.", f"Method {readable}.", f"Class {readable}."):
         if semantic_text.startswith(prefix):
-            return semantic_text[len(prefix):].strip()
+            return semantic_text[len(prefix) :].strip()
     return semantic_text
+
 
 _SYSTEM_ANSWER = (
     "You are an expert software engineer. Answer questions about codebases concisely "
@@ -111,20 +112,14 @@ def _build_runtime(data_dir: str | None) -> Any:
     return rt
 
 
-def _get_named_chunks(
-    rt: Any, project: str | None, max_samples: int, seed: int
-) -> list[dict]:
+def _get_named_chunks(rt: Any, project: str | None, max_samples: int, seed: int) -> list[dict]:
     rt.dense._open_or_create_table()
     q = rt.dense._table.search()
     if project:
         safe = project.replace("'", "''")
         q = q.where(f"file_path LIKE '{safe}%'", prefilter=True)
     rows = q.limit(max_samples * 50).to_list()
-    named = [
-        r
-        for r in rows
-        if r.get("name") and r.get("chunk_type") in _CHUNK_TYPES
-    ]
+    named = [r for r in rows if r.get("name") and r.get("chunk_type") in _CHUNK_TYPES]
     if len(named) > max_samples:
         rng = random.Random(seed)
         rng.shuffle(named)
@@ -132,9 +127,7 @@ def _get_named_chunks(
     return named
 
 
-def _get_discovery_chunks(
-    rt: Any, project: str | None, max_samples: int, seed: int
-) -> list[dict]:
+def _get_discovery_chunks(rt: Any, project: str | None, max_samples: int, seed: int) -> list[dict]:
     """Chunks with meaningful semantic_text — supports description-only queries."""
     rt.dense._open_or_create_table()
     q = rt.dense._table.search()
@@ -349,7 +342,11 @@ def main() -> None:
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
             for i, chunk in enumerate(chunks):
                 if not args.quiet:
-                    print(f"  [{i + 1:3d}/{len(chunks)}] {chunk['name'][:45]:<45}", end="\r", flush=True)
+                    print(
+                        f"  [{i + 1:3d}/{len(chunks)}] {chunk['name'][:45]:<45}",
+                        end="\r",
+                        flush=True,
+                    )
                 result = _eval_one(chunk, rt, args.k, executor, i, mode=args.mode)
                 all_results.append(result)
                 if result.error and not args.quiet:
@@ -380,7 +377,9 @@ def main() -> None:
     delta_c = composite_r - composite_b
     pct_c = (delta_c / composite_b * 100) if composite_b else 0.0
     sign = "+" if delta_c >= 0 else ""
-    print(f"{'composite':<18} {composite_b:>10.2f} {composite_r:>10.2f} {sign}{delta_c:>+7.2f} {sign}{pct_c:>7.1f}%")
+    print(
+        f"{'composite':<18} {composite_b:>10.2f} {composite_r:>10.2f} {sign}{delta_c:>+7.2f} {sign}{pct_c:>7.1f}%"
+    )
     print(f"\nScored: {scored}/{len(all_results)}  via: claude -p")
 
     if args.output:

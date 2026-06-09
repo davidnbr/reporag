@@ -598,11 +598,7 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
         return [e.get("command", "") for e in (h.get("hooks") or [])]
 
     def _entry_mcp_tools(h: dict) -> list[str]:
-        return [
-            e.get("tool", "")
-            for e in (h.get("hooks") or [])
-            if e.get("type") == "mcp_tool"
-        ]
+        return [e.get("tool", "") for e in (h.get("hooks") or []) if e.get("type") == "mcp_tool"]
 
     changed = False
 
@@ -617,15 +613,19 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
 
     # Add mcp_tool hook for index_codebase (runs directly — no Claude cooperation needed)
     if not any("index_codebase" in _entry_mcp_tools(h) for h in up_hooks):
-        up_hooks.append({
-            "matcher": ".*",
-            "hooks": [{
-                "type": "mcp_tool",
-                "server": "reporag",
-                "tool": "index_codebase",
-                "input": {"path": "${cwd}"},
-            }],
-        })
+        up_hooks.append(
+            {
+                "matcher": ".*",
+                "hooks": [
+                    {
+                        "type": "mcp_tool",
+                        "server": "reporag",
+                        "tool": "index_codebase",
+                        "input": {"path": "${cwd}"},
+                    }
+                ],
+            }
+        )
         changed = True
         if verbose:
             print("  added mcp_tool hook: index_codebase")
@@ -654,7 +654,9 @@ def _auto_setup_hooks() -> None:
         claude_dir = Path.home() / ".claude"
         changed = _setup_hooks_impl(claude_dir, verbose=False)
         if changed:
-            logger.info("reporag: Claude Code hooks installed automatically (restart Claude Code to activate)")
+            logger.info(
+                "reporag: Claude Code hooks installed automatically (restart Claude Code to activate)"
+            )
     except Exception:
         pass  # never break the MCP server
 

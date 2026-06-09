@@ -114,6 +114,7 @@ async def _run_index_bg(
             task.finished_at = time.monotonic()
             try:
                 from reporag.projects import update as _reg_update
+
                 _reg_update(str(root), task.indexed_chunks, task.indexed_files)
             except Exception:
                 pass

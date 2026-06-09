@@ -2,7 +2,6 @@
 
 import json
 import threading
-from pathlib import Path
 
 import pytest
 
@@ -15,7 +14,9 @@ def registry_path(tmp_path, monkeypatch):
     monkeypatch.setitem(__import__("sys").modules, "reporag.config", None)
     # Re-import so _registry_path() picks up the patched env
     import importlib
+
     import reporag.projects as proj_mod
+
     importlib.reload(proj_mod)
     return tmp_path / "projects.json", proj_mod
 

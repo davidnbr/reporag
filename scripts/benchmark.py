@@ -149,7 +149,7 @@ def _extract_symbol_name(query: str) -> str:
     """Extract bare symbol name from benchmark query templates."""
     for prefix in ("implementation of ", "how does "):
         if query.startswith(prefix):
-            query = query[len(prefix):]
+            query = query[len(prefix) :]
             break
     return query.removesuffix(" work").strip()
 

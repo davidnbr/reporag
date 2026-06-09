@@ -46,9 +46,7 @@ async def run(
     # ── Hybrid retrieval (same pipeline as query_code, no reranker) ──────────
     q_vec = runtime.embedder.encode_query(task)
     dense_ids = runtime.dense.search(q_vec, k=cfg.dense_candidates)
-    sparse_ids = (
-        runtime.bm25.search(task, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []
-    )
+    sparse_ids = runtime.bm25.search(task, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []
 
     from reporag.retrieval.rrf import rrf_fuse
 
