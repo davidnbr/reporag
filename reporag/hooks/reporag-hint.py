@@ -44,13 +44,33 @@ try:
 
     if best_proj and best_info:
         chunks = best_info.get("chunks", 0)
-        print(
-            f"[reporag] {best_proj} is indexed ({chunks:,} chunks) — USE IT before answering, "
-            f"don't guess from training data: query_code (semantic search for relevant snippets), "
-            f"get_symbol (jump to a function/class def + refs), get_architecture (module/dependency "
-            f"overview), ask_project (natural-language Q&A grounded in the indexed code), "
-            f"summarize_project (high-level summary). Pick the one matching the question; "
-            f"grounding in real code beats a plausible-sounding guess."
+
+        # Detect implementation intent from user prompt
+        prompt: str = data.get("prompt", "").lower()
+        impl_keywords = (
+            "implement", "add ", "create ", "build ", "write a", "write the",
+            "new endpoint", "new view", "new service", "new function", "new class",
+            "new feature", "new handler", "new middleware", "new model",
         )
+        is_impl = any(kw in prompt for kw in impl_keywords)
+
+        if is_impl:
+            print(
+                f"[reporag] {best_proj} is indexed ({chunks:,} chunks) — "
+                f"BEFORE WRITING NEW CODE: call find_existing(task=<your task description>, "
+                f"project={best_proj!r}) to surface existing functions and patterns you should "
+                f"reuse. Prevents duplication. "
+                f"Also available: query_code (semantic search), get_symbol (exact lookup), "
+                f"get_architecture (module topology)."
+            )
+        else:
+            print(
+                f"[reporag] {best_proj} is indexed ({chunks:,} chunks) — USE IT before answering, "
+                f"don't guess from training data: query_code (semantic search for relevant snippets), "
+                f"get_symbol (jump to a function/class def + refs), get_architecture (module/dependency "
+                f"overview), ask_project (natural-language Q&A grounded in the indexed code), "
+                f"summarize_project (high-level summary). Pick the one matching the question; "
+                f"grounding in real code beats a plausible-sounding guess."
+            )
 except Exception:
     pass  # never break Claude Code

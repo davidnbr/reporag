@@ -26,7 +26,18 @@ pytestmark = pytest.mark.integration
 
 _CHUNK_TYPES = {"function", "class", "method"}
 _GOLDEN_SIZE = 40
+_DISCOVERY_SIZE = 40
+_MIN_DESCRIPTION_CHARS = 30
 _SEED = 42
+
+
+def _strip_name_from_semantic(semantic_text: str, name: str) -> str:
+    """Remove leading 'Function/Method/Class {readable_name}.' prefix from semantic_text."""
+    readable = name.replace("_", " ").replace("-", " ")
+    for prefix in (f"Function {readable}.", f"Method {readable}.", f"Class {readable}."):
+        if semantic_text.startswith(prefix):
+            return semantic_text[len(prefix):].strip()
+    return semantic_text
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -190,3 +201,57 @@ def test_mrr_at_10(runtime: Any, golden: list) -> None:
 
     mrr = _mrr(pairs)
     assert mrr >= 0.65, f"MRR@10={mrr:.3f} < 0.65 threshold"
+
+
+@pytest.fixture(scope="module")
+def golden_discovery(runtime: Any) -> list[tuple[str, str]]:
+    """(gold_id, description_query) pairs for discovery mode.
+
+    Simulates "I want to write X" without knowing the function name.
+    Query = semantic_text minus the leading 'Function {name}.' prefix.
+    Circularity note: queries are derived from semantic_text, so recall is
+    optimistic vs. real-world unknown-unknowns; it validates the embedding
+    space is usable for discovery, not a real-world IR benchmark.
+    """
+    runtime.dense._open_or_create_table()
+    rows = runtime.dense._table.search().limit(_DISCOVERY_SIZE * 10).to_list()
+    candidates = [
+        r for r in rows
+        if r.get("name")
+        and r.get("chunk_type") in _CHUNK_TYPES
+        and r.get("semantic_text")
+    ]
+
+    # Only chunks with meaningful description beyond just the name prefix
+    meaningful = []
+    for r in candidates:
+        desc = _strip_name_from_semantic(r["semantic_text"], r["name"])
+        if len(desc) >= _MIN_DESCRIPTION_CHARS:
+            meaningful.append((r, desc))
+
+    if len(meaningful) < 5:
+        pytest.skip(f"Too few chunks with meaningful semantic_text ({len(meaningful)}). Index more code first.")
+
+    rng = random.Random(_SEED)
+    rng.shuffle(meaningful)
+    meaningful = meaningful[:_DISCOVERY_SIZE]
+
+    return [(r["id"], desc) for r, desc in meaningful]
+
+
+def test_discovery_recall_at_10(runtime: Any, golden_discovery: list) -> None:
+    """Discovery Recall@10 >= 0.50 using description-only queries (no function name).
+
+    Validates that semantic retrieval can surface existing code when Claude
+    describes what it wants to implement — the core anti-duplication use case.
+    """
+    pairs = []
+    for gold_id, description in golden_discovery:
+        q_vec = runtime.embedder.encode_query(description)
+        retrieved = _top_ids_full(runtime, q_vec, description, k=10)
+        pairs.append((gold_id, retrieved))
+
+    recall = _recall(pairs)
+    mrr = _mrr(pairs)
+    print(f"\n  Discovery — Recall@10={recall:.3f}  MRR@10={mrr:.3f}  (n={len(pairs)})")
+    assert recall >= 0.50, f"Discovery Recall@10={recall:.3f} < 0.50 threshold"

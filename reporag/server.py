@@ -437,6 +437,34 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["query", "project"],
             },
         ),
+        types.Tool(
+            name="find_existing",
+            description=(
+                "Before implementing new code, surface existing functions, classes, and patterns "
+                "that already handle the described functionality. Call this at the start of any "
+                "implementation task to prevent duplicating logic that already exists. "
+                "Returns ranked existing code with reuse hints."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "task": {
+                        "type": "string",
+                        "description": "Description of what you are about to implement",
+                    },
+                    "project": {
+                        "type": "string",
+                        "description": "Restrict to this absolute project root path",
+                    },
+                    "k": {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Number of results to return",
+                    },
+                },
+                "required": ["task"],
+            },
+        ),
     ]
 
 
@@ -476,6 +504,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
             from reporag.tools import ask
 
             result = await ask.run(arguments, _runtime)
+        elif name == "find_existing":
+            from reporag.tools import find_existing
+
+            result = await find_existing.run(arguments, _runtime)
         else:
             result = {"error": f"Unknown tool: {name}"}
     except Exception as exc:
