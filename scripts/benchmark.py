@@ -85,6 +85,24 @@ def _get_named_chunks(
 # ── Pipeline stages ───────────────────────────────────────────────────────────
 
 
+def _extract_symbol_name(query: str) -> str:
+    """Extract bare symbol name from benchmark query templates."""
+    for prefix in ("implementation of ", "how does "):
+        if query.startswith(prefix):
+            query = query[len(prefix):]
+            break
+    return query.removesuffix(" work").strip()
+
+
+def _stage_grep(rt: Any, _q_vec: Any, query: str, k: int) -> list[str]:
+    """Simulate grep: exact match on chunk name field — what Claude+tools would do."""
+    name = _extract_symbol_name(query)
+    rt.dense._open_or_create_table()
+    escaped = name.replace("'", "''")
+    rows = rt.dense._table.search().where(f"name = '{escaped}'").limit(k * 5).to_list()
+    return [r["id"] for r in rows[:k]]
+
+
 def _stage_dense(rt: Any, q_vec: Any, _query: str, k: int) -> list[str]:
     return rt.dense.search(q_vec, k=k)
 
@@ -162,6 +180,7 @@ def _stage_full_rerank(rt: Any, q_vec: Any, query: str, k: int) -> list[str]:
 
 
 _STAGES: dict[str, Any] = {
+    "grep": _stage_grep,
     "dense": _stage_dense,
     "bm25": _stage_bm25,
     "rrf": _stage_rrf,
