@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -557,6 +558,11 @@ def _cmd_status() -> None:
     print(json.dumps(result, indent=2))
 
 
+def _default_claude_dir() -> Path:
+    """Resolve Claude Code config dir, honoring CLAUDE_CONFIG_DIR override."""
+    return Path(os.environ.get("CLAUDE_CONFIG_DIR", "~/.claude")).expanduser()
+
+
 def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
     """Install reporag Claude Code hooks. Returns True if settings changed."""
     import shutil
@@ -630,13 +636,27 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
         if verbose:
             print("  added mcp_tool hook: index_codebase")
 
-    # Add command hook for reporag-hint.py (injects context into Claude's window)
-    hint_script = str(hooks_dir / "reporag-hint.py")
-    if not any(hint_script in _entry_commands(h) for h in up_hooks):
-        up_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": hint_script}]})
+    # Add command hook for reporag-hint.py (injects context into Claude's window).
+    # Use the portable ${CLAUDE_CONFIG_DIR:-$HOME/.claude} form so settings.json
+    # works unchanged across machines with different home directories.
+    hint_template = "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/reporag-hint.py"
+    before = len(up_hooks)
+    up_hooks[:] = [
+        h
+        for h in up_hooks
+        if not any(
+            c.endswith("/reporag-hint.py") and c != hint_template for c in _entry_commands(h)
+        )
+    ]
+    if len(up_hooks) < before:
         changed = True
         if verbose:
-            print(f"  added command hook: {hint_script}")
+            print("  removed stale reporag-hint.py command hook")
+    if not any(hint_template in _entry_commands(h) for h in up_hooks):
+        up_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": hint_template}]})
+        changed = True
+        if verbose:
+            print(f"  added command hook: {hint_template}")
 
     if changed:
         tmp = settings_path.with_suffix(".tmp")
@@ -651,7 +671,7 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
 def _auto_setup_hooks() -> None:
     """Called on MCP server start — installs hooks automatically on first connection."""
     try:
-        claude_dir = Path.home() / ".claude"
+        claude_dir = _default_claude_dir()
         changed = _setup_hooks_impl(claude_dir, verbose=False)
         if changed:
             logger.info(
@@ -666,10 +686,14 @@ def _cmd_setup_hooks() -> None:
     import sys
 
     p = argparse.ArgumentParser(prog="reporag setup-hooks")
-    p.add_argument("--claude-dir", default="~/.claude", help="Claude config directory")
+    p.add_argument(
+        "--claude-dir",
+        default=None,
+        help="Claude config directory (default: $CLAUDE_CONFIG_DIR or ~/.claude)",
+    )
     args = p.parse_args(sys.argv[2:])
 
-    claude_dir = Path(args.claude_dir).expanduser()
+    claude_dir = Path(args.claude_dir).expanduser() if args.claude_dir else _default_claude_dir()
     _setup_hooks_impl(claude_dir, verbose=True)
     print("\nDone. Restart Claude Code to activate hooks.")
 
@@ -762,16 +786,21 @@ def _cmd_setup() -> None:
         default="all",
         help="Which AI client to configure (default: all)",
     )
-    p.add_argument("--claude-dir", default="~/.claude")
+    p.add_argument(
+        "--claude-dir",
+        default=None,
+        help="Claude config directory (default: $CLAUDE_CONFIG_DIR or ~/.claude)",
+    )
     p.add_argument("--cursor-dir", default="~/.cursor")
     args = p.parse_args(sys.argv[2:])
 
     clients = ["claude", "cursor"] if args.client == "all" else [args.client]
+    claude_dir = Path(args.claude_dir).expanduser() if args.claude_dir else _default_claude_dir()
 
     for client in clients:
         print(f"\n[{client}]")
         if client == "claude":
-            _setup_hooks_impl(Path(args.claude_dir).expanduser(), verbose=True)
+            _setup_hooks_impl(claude_dir, verbose=True)
             print("  Restart Claude Code to activate hooks.")
         else:
             _setup_cursor_impl(Path(args.cursor_dir).expanduser(), verbose=True)
