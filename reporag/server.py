@@ -169,6 +169,7 @@ class Runtime:
             chunk_strategy=self.config.chunk_strategy,
             chunk_window_lines=self.config.chunk_window_lines,
             chunk_overlap_lines=self.config.chunk_overlap_lines,
+            graph_db=self.graph_db,
         )
 
         bm25_path = data / "bm25"

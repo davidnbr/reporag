@@ -86,6 +86,9 @@ class GraphDB:
         self._conn.execute("DELETE FROM edges WHERE src = ?", (file_path,))
         self._conn.execute("DELETE FROM index_log WHERE file_path = ?", (file_path,))
 
+    def delete_symbols_for_file(self, file_path: str) -> None:
+        self._conn.execute("DELETE FROM symbols WHERE file_path = ?", (file_path,))
+
     def log_file(self, file_path: str, language: str, graph_source: str) -> None:
         import time
 

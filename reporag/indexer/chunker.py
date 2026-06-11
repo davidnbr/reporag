@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS file_index (
 );
 """
 
+_SYMBOL_CHUNK_TYPES = {"function", "method", "class", "interface"}
+
 
 class ChunkIndexer:
     """Full pipeline: parse → embed → store chunks."""
@@ -47,6 +49,7 @@ class ChunkIndexer:
         chunk_strategy: str = "hybrid",
         chunk_window_lines: int = 64,
         chunk_overlap_lines: int = 16,
+        graph_db: Any = None,
     ) -> None:
         self._data_dir = data_dir
         self._embedder = embedder
@@ -55,6 +58,7 @@ class ChunkIndexer:
         self._chunk_strategy = chunk_strategy
         self._chunk_window_lines = chunk_window_lines
         self._chunk_overlap_lines = chunk_overlap_lines
+        self._graph_db = graph_db
         self._meta_conn = self._init_meta_db()
 
     def _init_meta_db(self) -> sqlite3.Connection:
@@ -85,6 +89,27 @@ class ChunkIndexer:
             (str(path), path.stat().st_mtime, self._file_hash(path), chunk_count, time.time()),
         )
         self._meta_conn.commit()
+
+    def _write_symbols(self, chunks: list[Chunk], files: list[Path]) -> None:
+        """Upsert symbol-table rows for function/method/class/interface chunks."""
+        if self._graph_db is None:
+            return
+        for path in files:
+            self._graph_db.delete_symbols_for_file(str(path))
+        for chunk in chunks:
+            if chunk.chunk_type in _SYMBOL_CHUNK_TYPES:
+                self._graph_db.upsert_symbol(
+                    {
+                        "id": chunk.id,
+                        "name": chunk.name,
+                        "file_path": chunk.file_path,
+                        "language": chunk.language,
+                        "symbol_type": chunk.chunk_type,
+                        "start_line": chunk.start_line,
+                        "end_line": chunk.end_line,
+                    }
+                )
+        self._graph_db.commit()
 
     def index_files(
         self,
@@ -119,6 +144,8 @@ class ChunkIndexer:
                 all_chunks.extend(chunks)
             except Exception as exc:
                 logger.warning("Parse failed for %s: %s", path, exc)
+
+        self._write_symbols(all_chunks, to_index)
 
         if not all_chunks:
             return {"files": 0, "chunks": 0, "skipped": len(files) - len(to_index)}
@@ -212,6 +239,8 @@ class ChunkIndexer:
                     batch_chunks.extend(chunks)
                 except Exception as exc:
                     logger.warning("Parse failed for %s: %s", path, exc)
+
+            self._write_symbols(batch_chunks, batch)
 
             if batch_chunks:
                 texts = [chunk_to_semantic_text(c) for c in batch_chunks]
