@@ -72,14 +72,26 @@ def test_reverse_ppr_top_k_respected():
 def test_merge_rrf_ppr_normalization():
     """Merged scores should be in [0, 1] range."""
     rrf = {"a": 0.1, "b": 0.05, "c": 0.02}
-    ppr = {"a": 0.3, "b": 0.1, "d": 0.5}
-    merged = merge_rrf_ppr(rrf, ppr)
+    chunk_files = {"a": "fa.py", "b": "fb.py", "c": "fc.py"}
+    file_ppr = {"fa.py": 0.3, "fb.py": 0.1, "fd.py": 0.5}
+    merged = merge_rrf_ppr(rrf, chunk_files, file_ppr)
     assert all(0.0 <= v <= 1.0 for v in merged.values())
 
 
-def test_merge_rrf_ppr_union():
-    """Merged result contains all docs from both inputs."""
+def test_merge_rrf_ppr_keys_are_chunk_pool_only():
+    """Output is keyed by chunk id — file paths from PPR must not leak in."""
     rrf = {"a": 0.1, "b": 0.05}
-    ppr = {"c": 0.3, "d": 0.1}
-    merged = merge_rrf_ppr(rrf, ppr)
-    assert set(merged.keys()) == {"a", "b", "c", "d"}
+    chunk_files = {"a": "fa.py", "b": "fb.py"}
+    file_ppr = {"fc.py": 0.3, "fd.py": 0.1}
+    merged = merge_rrf_ppr(rrf, chunk_files, file_ppr)
+    assert set(merged.keys()) == {"a", "b"}
+
+
+def test_merge_rrf_ppr_high_ppr_file_chunk_ranks_higher():
+    """Equal-RRF chunks: the one in the higher-PPR file should rank first."""
+    rrf = {"a": 0.1, "b": 0.1}
+    chunk_files = {"a": "high.py", "b": "low.py"}
+    file_ppr = {"high.py": 1.0, "low.py": 0.1}
+    merged = merge_rrf_ppr(rrf, chunk_files, file_ppr)
+    assert set(merged.keys()) == {"a", "b"}
+    assert merged["a"] > merged["b"]

@@ -69,8 +69,11 @@ async def run(
     )
 
     # ── 4. Reverse Personalized PageRank (gated on graph quality) ───────────
+    # PPR operates on the dependency graph, whose nodes are file paths — not
+    # chunk ids. Map RRF-top chunk ids -> their file paths to seed PPR, and
+    # get back file_path -> PPR score (merged onto chunks in step 6).
     seed_ids = [doc_id for doc_id, _ in rrf_top_k(fused, cfg.ppr_seed_k)]
-    ppr_scores: dict[str, float] = {}
+    file_ppr: dict[str, float] = {}
     graph_edge_count = runtime.graph.number_of_edges() if runtime.graph is not None else 0
     ppr_enabled = (
         runtime.graph is not None
@@ -82,22 +85,27 @@ async def run(
     if ppr_enabled:
         from reporag.retrieval.pagerank import reverse_personalized_pagerank
 
-        ppr_scores = reverse_personalized_pagerank(
-            runtime.graph, seed_ids, alpha=cfg.ppr_alpha, top_k=k * 3
+        seed_chunks = runtime.dense.get_chunks(seed_ids)
+        seed_files = [c["file_path"] for c in seed_chunks if c.get("file_path")]
+        file_ppr = reverse_personalized_pagerank(
+            runtime.graph, seed_files, alpha=cfg.ppr_alpha, top_k=k * 3
         )
 
-    # ── 5. Score merge ──────────────────────────────────────────────────────
-    from reporag.retrieval.pagerank import merge_rrf_ppr
-
-    merged = merge_rrf_ppr(fused, ppr_scores, ppr_weight=ppr_weight)
-    candidate_ids = [doc_id for doc_id, _ in list(merged.items())[: k * 3]]
-
-    # ── 6. Fetch full chunk records ─────────────────────────────────────────
+    # ── 5. Fetch candidate chunks (RRF pool only — PPR re-ranks within it) ──
+    candidate_ids = [doc_id for doc_id, _ in rrf_top_k(fused, k * 3)]
     candidates = runtime.dense.get_chunks(candidate_ids)
 
-    # Restore merged score order (get_chunks returns DB scan order, not ranked order)
+    # Restore RRF order before re-scoring (get_chunks returns DB scan order)
     id_rank = {doc_id: i for i, doc_id in enumerate(candidate_ids)}
     candidates.sort(key=lambda c: id_rank.get(c.get("id", ""), len(candidate_ids)))
+
+    # ── 6. Score merge (per-chunk RRF + its file's PPR score) ───────────────
+    from reporag.retrieval.pagerank import merge_rrf_ppr
+
+    chunk_files = {c["id"]: c.get("file_path", "") for c in candidates}
+    rrf_pool = {doc_id: score for doc_id, score in fused.items() if doc_id in chunk_files}
+    merged = merge_rrf_ppr(rrf_pool, chunk_files, file_ppr, ppr_weight=ppr_weight)
+    candidates.sort(key=lambda c: merged.get(c.get("id", ""), 0.0), reverse=True)
 
     # ── 7. Cross-encoder rerank ─────────────────────────────────────────────
     if do_rerank and candidates and len(candidates) <= cfg.reranker_k:
@@ -115,7 +123,7 @@ async def run(
             "dense_hits": len(dense_ids),
             "sparse_hits": len(sparse_ids),
             "rrf_merged": len(fused),
-            "ppr_applied": len(ppr_scores) > 0,
+            "ppr_applied": len(file_ppr) > 0,
             "reranked": do_rerank and len(candidates) <= cfg.reranker_k,
         },
     }

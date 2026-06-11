@@ -59,13 +59,30 @@ def reverse_personalized_pagerank(
 
 def merge_rrf_ppr(
     rrf_scores: dict[str, float],
-    ppr_scores: dict[str, float],
+    chunk_files: dict[str, str],
+    file_ppr: dict[str, float],
     rrf_weight: float = 0.6,
     ppr_weight: float = 0.4,
 ) -> dict[str, float]:
     """
-    Combine normalized RRF and PPR scores into a single ranking.
-    Both inputs normalized to [0, 1] before merge.
+    Combine normalized RRF (chunk-level) and PPR (file-level) scores into a
+    single per-chunk ranking.
+
+    RRF and PPR operate in different id spaces: RRF scores are keyed by chunk
+    id, PPR scores are keyed by file path (graph nodes). `chunk_files` maps
+    chunk id -> file path so a chunk inherits its file's PPR score. Both
+    inputs normalized to [0, 1] before merge.
+
+    Args:
+        rrf_scores: chunk_id -> RRF score (candidate pool only).
+        chunk_files: chunk_id -> file_path, for every chunk in the pool.
+        file_ppr: file_path -> PPR score.
+        rrf_weight: weight for the RRF component.
+        ppr_weight: weight for the PPR component.
+
+    Returns:
+        chunk_id -> merged score, sorted descending. Keys are exactly
+        `chunk_files.keys()` (the candidate pool).
     """
 
     def _normalize(d: dict[str, float]) -> dict[str, float]:
@@ -77,11 +94,11 @@ def merge_rrf_ppr(
         return {k: v / max_v for k, v in d.items()}
 
     rrf_n = _normalize(rrf_scores)
-    ppr_n = _normalize(ppr_scores)
+    ppr_n = _normalize(file_ppr)
 
-    all_ids = set(rrf_n) | set(ppr_n)
     merged = {
-        doc_id: rrf_weight * rrf_n.get(doc_id, 0.0) + ppr_weight * ppr_n.get(doc_id, 0.0)
-        for doc_id in all_ids
+        chunk_id: rrf_weight * rrf_n.get(chunk_id, 0.0)
+        + ppr_weight * ppr_n.get(chunk_files.get(chunk_id, ""), 0.0)
+        for chunk_id in chunk_files
     }
     return dict(sorted(merged.items(), key=lambda x: x[1], reverse=True))
