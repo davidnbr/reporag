@@ -82,6 +82,16 @@ async def _run_index_bg(
     task = runtime.index_tasks[task_id]
     try:
         async with runtime.index_sem:
+            known_files = runtime.chunker.files_under(str(root))
+            current_files = {str(f) for f in files}
+            orphans = [f for f in known_files if f not in current_files]
+            for orphan in orphans:
+                runtime.dense.delete_by_file(orphan)
+                runtime.chunker.forget_file(orphan)
+                runtime.graph_db.delete_file(orphan)
+            if orphans:
+                runtime.graph_db.commit()
+                logger.info("Index task %s: purged %d orphaned files", task_id, len(orphans))
 
             def on_batch(files_done: int, chunks_done: int, skipped: int) -> None:
                 task.indexed_files = files_done
@@ -93,6 +103,7 @@ async def _run_index_bg(
                 incremental=incremental,
                 file_batch_size=runtime.config.index_batch_size,
                 on_batch=on_batch,
+                force_bm25_rebuild=bool(orphans),
             )
 
             task.indexed_files = chunk_stats["files"]

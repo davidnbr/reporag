@@ -83,7 +83,8 @@ class DenseIndex:
     def delete_by_file(self, file_path: str) -> None:
         """Remove all chunks belonging to a file (for incremental re-index)."""
         self._open_or_create_table()
-        self._table.delete(f"file_path = '{file_path}'")
+        safe = file_path.replace("'", "''")
+        self._table.delete(f"file_path = '{safe}'")
 
     def delete_by_project(self, project_root: str) -> int:
         """Remove all chunks whose file_path starts with project_root. Returns deleted count."""

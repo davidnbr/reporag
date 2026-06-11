@@ -33,9 +33,11 @@ def test_no_change_skips_graph_and_registry(monkeypatch):
 
     runtime = SimpleNamespace(
         chunker=SimpleNamespace(
+            files_under=Mock(return_value=[]),
+            forget_file=Mock(),
             index_files_batched_async=AsyncMock(
                 return_value={"files": 0, "chunks": 0, "skipped": 3}
-            )
+            ),
         ),
         dense=Mock(),
         graph_db=Mock(),
@@ -167,3 +169,79 @@ def test_registry_totals_match_project_chunk_count(tmp_path: Path, registry_path
     assert entry_after is not None
     assert entry_after["chunks"] == expected_chunks
     assert entry_after["chunks"] == dense.count_by_project(str(root))
+
+
+def test_orphaned_file_chunks_purged_on_reindex(tmp_path: Path):
+    pytest.importorskip("tree_sitter", reason="tree-sitter not installed")
+    pytest.importorskip("tree_sitter_python", reason="tree-sitter-python not installed")
+    pytest.importorskip("lancedb", reason="lancedb not installed")
+    pytest.importorskip("bm25s", reason="bm25s not installed")
+
+    from reporag.indexer.chunker import ChunkIndexer
+    from reporag.indexer.graph_builder import GraphDB
+    from reporag.retrieval.dense import DenseIndex
+    from reporag.retrieval.sparse import BM25Index
+
+    dim = 4
+
+    class _FakeEmbedder:
+        def encode_corpus(self, texts: list[str], batch_size: int = 64):
+            import numpy as np
+
+            return np.zeros((len(texts), dim), dtype=np.float32)
+
+    root = tmp_path / "project"
+    root.mkdir()
+    a_file = root / "a.py"
+    b_file = root / "b.py"
+    a_file.write_text("def func_a():\n    return 1\n")
+    b_file.write_text("def func_b():\n    return 2\n")
+
+    data = tmp_path / "data"
+    graph_db = GraphDB(data / "dependency_graph.db")
+    dense = DenseIndex(data, dim=dim)
+    bm25 = BM25Index()
+    chunker = ChunkIndexer(
+        data_dir=data,
+        embedder=_FakeEmbedder(),
+        dense_index=dense,
+        bm25_index=bm25,
+        graph_db=graph_db,
+    )
+
+    runtime = SimpleNamespace(
+        chunker=chunker,
+        dense=dense,
+        graph_db=graph_db,
+        reranker=None,
+        reload_graph=Mock(),
+        index_sem=asyncio.Semaphore(1),
+        config=SimpleNamespace(index_batch_size=20),
+        index_tasks={},
+    )
+
+    def _new_task(task_id: str, total_files: int) -> None:
+        runtime.index_tasks[task_id] = IndexTask(
+            task_id=task_id,
+            project=str(root),
+            started_at=time.monotonic(),
+            total_files=total_files,
+        )
+
+    _new_task("t1", 2)
+    asyncio.run(_run_index_bg("t1", root, [a_file, b_file], incremental=True, runtime=runtime))
+    assert runtime.index_tasks["t1"].indexed_files == 2
+
+    b_path = str(b_file)
+    assert b_path in chunker.files_under(str(root))
+    total_before = dense.count_by_project(str(root))
+    assert total_before > 0
+
+    b_file.unlink()
+
+    _new_task("t2", 1)
+    asyncio.run(_run_index_bg("t2", root, [a_file], incremental=True, runtime=runtime))
+
+    assert b_path not in chunker.files_under(str(root))
+    assert dense.count_by_project(str(root)) < total_before
+    assert dense._table.search().where(f"file_path = '{b_path}'").to_list() == []

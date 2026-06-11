@@ -118,6 +118,18 @@ class ChunkIndexer:
         ).fetchone()
         return row[0] if row else 0
 
+    def files_under(self, root: str) -> list[str]:
+        """Return all file_index paths under `root` (for orphan detection)."""
+        rows = self._meta_conn.execute(
+            "SELECT file_path FROM file_index WHERE file_path LIKE ?", (root.rstrip("/") + "/%",)
+        ).fetchall()
+        return [r[0] for r in rows]
+
+    def forget_file(self, file_path: str) -> None:
+        """Remove a file's file_index row (for files deleted from disk)."""
+        self._meta_conn.execute("DELETE FROM file_index WHERE file_path = ?", (file_path,))
+        self._meta_conn.commit()
+
     def index_files(
         self,
         files: list[Path],
@@ -213,12 +225,15 @@ class ChunkIndexer:
         incremental: bool = True,
         file_batch_size: int = 20,
         on_batch: Callable[[int, int, int], None] | None = None,
+        force_bm25_rebuild: bool = False,
     ) -> dict[str, int]:
         """
         Index files in batches, upserting to LanceDB after each batch.
         Results become queryable after the first batch (~seconds vs minutes).
 
         on_batch(files_indexed, chunks_indexed, files_skipped) called after each batch.
+        force_bm25_rebuild: rebuild BM25 even if no chunks changed (e.g. orphan
+        chunks were purged for files deleted from disk).
         """
         to_index = [f for f in files if not (incremental and self._is_unchanged(f))]
         skipped = len(files) - len(to_index)
@@ -294,8 +309,9 @@ class ChunkIndexer:
         # BM25 rebuild once at end (full scan of LanceDB — fast, <10s for 200k LOC).
         # Skip when nothing changed: an empty-table .search().to_list() returns
         # ALL rows in LanceDB, so a no-op rebuild would still scan + rewrite the
-        # entire index on every call.
-        if total_chunks > 0:
+        # entire index on every call. force_bm25_rebuild overrides this when
+        # orphan chunks were purged (deleted-on-disk files).
+        if total_chunks > 0 or force_bm25_rebuild:
             await loop.run_in_executor(None, self._rebuild_bm25)
 
         return {"files": files_done, "chunks": total_chunks, "skipped": skipped}
