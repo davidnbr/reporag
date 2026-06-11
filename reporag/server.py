@@ -1,9 +1,9 @@
 """
 RAG MCP Server — entry point.
 
-Exposes 10 tools via MCP stdio transport:
-  index_codebase, index_status, query_code, get_symbol, remember, recall,
-  summarize_project, get_architecture, project_status, ask_project
+Exposes 11 tools via MCP stdio transport:
+  index_codebase, index_status, query_code, find_existing, get_symbol, remember,
+  recall, summarize_project, get_architecture, project_status, ask_project
 
 Compatible with: agy, Claude Code, Cursor, any MCP client.
 Zero API cost at query time. All computation local.

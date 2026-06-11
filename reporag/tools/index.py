@@ -62,6 +62,30 @@ _ENTRY_POINTS = {
 }
 
 
+_TASK_TTL_S = 3600
+_MAX_TASKS = 50
+
+
+def _prune_index_tasks(index_tasks: dict[str, Any]) -> None:
+    """Drop finished tasks older than 1h, then trim to the 50 most recent."""
+    now = time.monotonic()
+    stale = [
+        tid
+        for tid, task in index_tasks.items()
+        if task.finished_at is not None and now - task.finished_at > _TASK_TTL_S
+    ]
+    for tid in stale:
+        del index_tasks[tid]
+
+    if len(index_tasks) > _MAX_TASKS:
+        finished = sorted(
+            (t for t in index_tasks.values() if t.finished_at is not None),
+            key=lambda t: t.finished_at,
+        )
+        for task in finished[: len(index_tasks) - _MAX_TASKS]:
+            del index_tasks[task.task_id]
+
+
 def _priority_sort(files: list[Path]) -> list[Path]:
     """Entry points first, then most-recently-modified first."""
 
@@ -196,6 +220,8 @@ async def run(
         }
 
     files = _priority_sort(files)
+
+    _prune_index_tasks(runtime.index_tasks)
 
     task_id = uuid.uuid4().hex[:12]
     from reporag.server import IndexTask

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import sqlite3
 import time
 from pathlib import Path
@@ -138,8 +139,8 @@ def _build_fts_query(query: str, tags: list[str] | None) -> str:
         terms.extend(t.strip() for t in tags if t.strip())
     if not terms:
         return '""'
-    # Sanitize: remove FTS5 special chars that would cause syntax errors
-    safe = [t.replace('"', "").replace("(", "").replace(")", "") for t in terms]
+    # Sanitize: strip all FTS5 special chars, keep only alnum + underscore
+    safe = [re.sub(r"[^\w]", "", t) for t in terms]
     safe = [t for t in safe if t]
     return " OR ".join(safe) if safe else '""'
 

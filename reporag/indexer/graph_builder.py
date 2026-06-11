@@ -117,13 +117,6 @@ class GraphDB:
             G.add_edge(row["src"], row["dst"])
         return G
 
-    def coverage_report(self) -> dict[str, int]:
-        """Return count of files indexed by SCIP vs heuristic."""
-        rows = self._conn.execute(
-            "SELECT graph_source, COUNT(*) as cnt FROM index_log GROUP BY graph_source"
-        ).fetchall()
-        return {r["graph_source"]: r["cnt"] for r in rows}
-
     def close(self) -> None:
         self._conn.close()
 

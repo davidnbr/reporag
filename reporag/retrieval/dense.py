@@ -86,15 +86,6 @@ class DenseIndex:
         safe = file_path.replace("'", "''")
         self._table.delete(f"file_path = '{safe}'")
 
-    def delete_by_project(self, project_root: str) -> int:
-        """Remove all chunks whose file_path starts with project_root. Returns deleted count."""
-        self._open_or_create_table()
-        before = self._table.count_rows()
-        # LanceDB delete supports SQL-like WHERE; use starts_with via LIKE
-        safe = project_root.replace("'", "''")
-        self._table.delete(f"file_path LIKE '{safe}%'")
-        return before - self._table.count_rows()
-
     def search(
         self,
         query_vec: np.ndarray,

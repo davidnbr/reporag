@@ -12,7 +12,6 @@ nomic-embed-text requires prefix tokens:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import Literal
 
@@ -109,11 +108,6 @@ class Embedder:
                 resp.raise_for_status()
                 vecs.append(np.array(resp.json()["embedding"], dtype=np.float32))
         return np.stack(vecs)
-
-    async def encode_corpus_async(self, texts: list[str], batch_size: int = 64) -> np.ndarray:
-        """Async wrapper — offloads blocking encode to thread pool."""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, self.encode_corpus, texts, batch_size)
 
     @property
     def dim(self) -> int:
