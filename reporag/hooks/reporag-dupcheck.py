@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""
+Claude Code PreToolUse hook — write-time duplicate-symbol detection.
+
+Before a Write/Edit tool call lands, scans the new content for top-level
+`def`/`class`/`function` definitions and checks the indexed symbols table
+for exact-name collisions in OTHER files. Emits a non-blocking warning so
+Claude can verify it isn't reimplementing something that already exists.
+
+Exact-name match only (v1) — no embeddings/ML, must stay fast (<50ms).
+Reads dependency_graph.db read-only; never blocks the tool call.
+"""
+
+import json
+import os
+import re
+import sqlite3
+import sys
+from pathlib import Path
+
+_DEF_RE = re.compile(r"^\s*(?:def|class|function)\s+(\w+)", re.MULTILINE)
+
+_MAX_WARNINGS = 5
+
+
+def extract_names(content: str) -> set[str]:
+    """Return the set of top-level def/class/function names in `content`."""
+    return set(_DEF_RE.findall(content))
+
+
+def find_collisions(
+    db_path: Path, names: set[str], current_file: str
+) -> list[tuple[str, str, int]]:
+    """Return (name, file_path, start_line) for symbols matching `names` in other files."""
+    if not names or not db_path.exists():
+        return []
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        placeholders = ",".join("?" * len(names))
+        rows = conn.execute(
+            f"SELECT name, file_path, start_line FROM symbols WHERE name IN ({placeholders})",
+            tuple(names),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [(name, fp, line) for name, fp, line in rows if fp != current_file]
+
+
+def main() -> None:
+    try:
+        data = json.load(sys.stdin)
+        tool_input = data.get("tool_input", {})
+        file_path = tool_input.get("file_path", "")
+        content = tool_input.get("content") or tool_input.get("new_string") or ""
+        if not content:
+            return
+
+        names = extract_names(content)
+        if not names:
+            return
+
+        data_dir = Path(os.environ.get("REPORAG_DATA_DIR", "~/.local/share/reporag")).expanduser()
+        collisions = find_collisions(data_dir / "dependency_graph.db", names, file_path)
+
+        for name, fp, line in collisions[:_MAX_WARNINGS]:
+            print(
+                f"[reporag] WARNING: '{name}' already exists at {fp}:{line} — "
+                f"verify you're not duplicating before writing."
+            )
+    except Exception:
+        pass  # never break Claude Code
+
+
+if __name__ == "__main__":
+    main()

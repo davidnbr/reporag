@@ -662,6 +662,21 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
         if verbose:
             print(f"  added command hook: {hint_template}")
 
+    # Add PreToolUse command hook for reporag-dupcheck.py — write-time
+    # duplicate-symbol detection on Write/Edit calls.
+    dupcheck_template = "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/reporag-dupcheck.py"
+    pre_hooks: list = hooks_cfg.setdefault("PreToolUse", [])
+    if not any(dupcheck_template in _entry_commands(h) for h in pre_hooks):
+        pre_hooks.append(
+            {
+                "matcher": "Write|Edit",
+                "hooks": [{"type": "command", "command": dupcheck_template}],
+            }
+        )
+        changed = True
+        if verbose:
+            print(f"  added command hook: {dupcheck_template}")
+
     if changed:
         tmp = settings_path.with_suffix(".tmp")
         tmp.write_text(json.dumps(settings, indent=2))
