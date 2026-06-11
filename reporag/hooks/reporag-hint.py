@@ -21,6 +21,10 @@ try:
     if not cwd:
         sys.exit(0)
 
+    # Respect opt-out: .reporag-ignore in project root silences this hook
+    if (Path(cwd) / ".reporag-ignore").exists():
+        sys.exit(0)
+
     data_dir = Path(os.environ.get("REPORAG_DATA_DIR", "~/.local/share/reporag")).expanduser()
     registry_path = data_dir / "projects.json"
 

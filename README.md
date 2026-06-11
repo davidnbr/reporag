@@ -275,6 +275,10 @@ Parse, embed, and graph-index a project. Run once, then incrementally on changes
 }
 ```
 
+Create an empty `.reporag-ignore` file in a project's root to opt it out of indexing
+entirely — `index_codebase` returns `{"status": "skipped", ...}` without starting a
+background task, and the `reporag-hint` hook stays silent for that directory.
+
 ### `query_code`
 
 Hybrid RAG retrieval: dense + BM25 + RRF + PPR + cross-encoder rerank.

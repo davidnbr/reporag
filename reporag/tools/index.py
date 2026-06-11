@@ -170,6 +170,8 @@ async def run(
         return {"error": f"Path does not exist: {root}"}
     if not root.is_dir():
         return {"error": f"Path is not a directory: {root}"}
+    if (root / ".reporag-ignore").exists():
+        return {"status": "skipped", "reason": ".reporag-ignore present", "project": str(root)}
 
     incremental: bool = arguments.get("incremental", True)
     languages_filter: list[str] | None = arguments.get("languages")

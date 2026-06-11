@@ -20,7 +20,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 
 from reporag.server import IndexTask
-from reporag.tools.index import _run_index_bg
+from reporag.tools.index import _run_index_bg, run
 
 
 def test_no_change_skips_graph_and_registry(monkeypatch):
@@ -245,3 +245,20 @@ def test_orphaned_file_chunks_purged_on_reindex(tmp_path: Path):
     assert b_path not in chunker.files_under(str(root))
     assert dense.count_by_project(str(root)) < total_before
     assert dense._table.search().where(f"file_path = '{b_path}'").to_list() == []
+
+
+def test_run_skips_project_with_reporag_ignore(tmp_path: Path):
+    root = tmp_path / "proj"
+    root.mkdir()
+    (root / ".reporag-ignore").touch()
+    (root / "main.py").write_text("x = 1\n")
+
+    runtime = SimpleNamespace(index_tasks={})
+    result = asyncio.run(run({"path": str(root)}, runtime))
+
+    assert result == {
+        "status": "skipped",
+        "reason": ".reporag-ignore present",
+        "project": str(root),
+    }
+    assert runtime.index_tasks == {}
