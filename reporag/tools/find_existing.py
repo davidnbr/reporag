@@ -14,11 +14,26 @@ Pipeline: same hybrid retrieval as query_code (dense + BM25 + RRF), then:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 logger = logging.getLogger(__name__)
 
 _MAX_PER_FILE = 2
+_RELEVANCE_RATIO = 0.35
+
+_SEMANTIC_PREFIX_RE = re.compile(r"^(?:Function|Method|Class|Interface)\s+\S[^.]*\.\s*")
+_PARAM_RETURN_RE = re.compile(r"^(?:(?:Parameters|Returns):[^.]*\.\s*)+")
+
+
+def _description_from_semantic(semantic_text: str, name: str) -> str:
+    """Strip the type/name/signature prefix from semantic_text, leaving the doc-derived description."""
+    text = _SEMANTIC_PREFIX_RE.sub("", semantic_text, count=1).strip()
+    text = _PARAM_RETURN_RE.sub("", text).strip()
+    if not text:
+        return f"implements {name.replace('_', ' ').replace('-', ' ')}"
+    first_sentence = text.split(". ", 1)[0].rstrip(".")
+    return first_sentence[:160]
 
 
 async def run(
@@ -72,6 +87,13 @@ async def run(
     # Skip module-level chunks — functions and classes are actionable reuse targets
     candidates = [c for c in candidates if c.get("chunk_type") in {"function", "method", "class"}]
 
+    # ── Relevance threshold (relative to top RRF score) ──────────────────────
+    top_score = max((fused.get(c.get("id", ""), 0.0) for c in candidates), default=0.0)
+    if top_score > 0:
+        candidates = [
+            c for c in candidates if fused.get(c.get("id", ""), 0.0) >= _RELEVANCE_RATIO * top_score
+        ]
+
     # ── Deduplicate by file (max _MAX_PER_FILE per file) ─────────────────────
     file_counts: dict[str, int] = {}
     deduped = []
@@ -90,12 +112,13 @@ async def run(
         chunk_type = chunk.get("chunk_type", "")
         file_path = chunk.get("file_path", "")
         start_line = chunk.get("start_line", 0)
-        name_readable = name.replace("_", " ")
+        description = _description_from_semantic(chunk.get("semantic_text", ""), name)
         reuse_hint = (
-            f"Existing {chunk_type} '{name}' in {file_path}:{start_line} "
-            f"may already handle '{name_readable}'. "
-            f"Consider importing/extending instead of reimplementing."
+            f"Existing {chunk_type} '{name}' at {file_path}:{start_line}. "
+            f"{description}. Import/extend instead of reimplementing."
         )
+        signature = chunk.get("raw_content", "").splitlines()[0][:200] if chunk.get("raw_content") else ""
+        score = fused.get(chunk.get("id", ""), 0.0) / top_score if top_score > 0 else 0.0
         results.append(
             {
                 "file": file_path,
@@ -104,8 +127,10 @@ async def run(
                 "language": chunk.get("language", ""),
                 "start_line": start_line,
                 "end_line": chunk.get("end_line", 0),
+                "signature": signature,
                 "snippet": chunk.get("semantic_text", "")[:400],
                 "reuse_hint": reuse_hint,
+                "score": round(score, 4),
             }
         )
 
