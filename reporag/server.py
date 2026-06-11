@@ -156,6 +156,9 @@ class Runtime:
             backend=self.config.embed_backend,  # type: ignore[arg-type]
             ollama_url=self.config.ollama_url,
         )
+        logger.info(
+            "Embed model configured: %s (dim=%d)", self.config.embed_model, self.embedder.dim
+        )
         self.dense = DenseIndex(data, dim=self.embedder.dim)
         self.bm25 = BM25Index(k1=self.config.bm25_k1, b=self.config.bm25_b)
         self.reranker = CrossEncoderReranker(self.config.reranker_model)

@@ -13,9 +13,12 @@ nomic-embed-text requires prefix tokens:
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Literal
 
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 EmbedBackend = Literal["sentence-transformers", "ollama"]
 
@@ -47,8 +50,15 @@ class Embedder:
             from sentence_transformers import SentenceTransformer
 
             self._st_model = SentenceTransformer(self.model, trust_remote_code=True)
-        except Exception:
+        except Exception as exc:
             # Fall back to MiniLM if nomic fails (e.g., first-time download issue)
+            logger.warning(
+                "Failed to load %s (%s) — falling back to %s. "
+                "Existing 768-dim index is incompatible; re-index required.",
+                self.model,
+                exc,
+                _MINILM_MODEL,
+            )
             from sentence_transformers import SentenceTransformer
 
             self._st_model = SentenceTransformer(_MINILM_MODEL)
