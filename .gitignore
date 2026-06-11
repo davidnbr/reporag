@@ -27,3 +27,6 @@ __pycache__
 .codebrain/
 .reporag/
 docs/images
+
+# Benchmark output
+results_*.json
