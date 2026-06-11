@@ -146,3 +146,33 @@ def test_semantic_text_no_empty(py_file: Path):
     for c in chunks:
         text = chunk_to_semantic_text(c)
         assert text.strip(), f"Empty semantic text for chunk {c.name}"
+
+
+def test_rebuild_bm25_on_unopened_table(tmp_path: Path):
+    """_rebuild_bm25 must not crash when DenseIndex._table is still None.
+
+    Regression for: 'NoneType' object has no attribute 'search' — happened
+    when no batch ever upserted records (e.g. all files skipped via
+    incremental check), leaving DenseIndex._table unset.
+    """
+    pytest.importorskip("lancedb", reason="lancedb not installed")
+    pytest.importorskip("bm25s", reason="bm25s not installed")
+
+    from reporag.indexer.chunker import ChunkIndexer
+    from reporag.retrieval.dense import DenseIndex
+    from reporag.retrieval.sparse import BM25Index
+
+    dense = DenseIndex(tmp_path / "data", dim=4)
+    assert dense._table is None  # never opened
+
+    indexer = ChunkIndexer(
+        data_dir=tmp_path / "data",
+        embedder=None,
+        dense_index=dense,
+        bm25_index=BM25Index(),
+    )
+
+    indexer._rebuild_bm25()  # must not raise
+
+    assert dense._table is not None
+    assert indexer._bm25.is_ready is False

@@ -263,6 +263,7 @@ class ChunkIndexer:
     def _rebuild_bm25(self) -> None:
         """Rebuild BM25 index from all chunks currently in LanceDB."""
         logger.info("Rebuilding BM25 index...")
+        self._dense._open_or_create_table()
         all_records = self._dense._table.search().select(["id", "semantic_text"]).to_list()
         ids = [r["id"] for r in all_records]
         texts = [r["semantic_text"] for r in all_records]
