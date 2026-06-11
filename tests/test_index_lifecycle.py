@@ -357,6 +357,69 @@ def test_desync_meta_without_chunks_forces_full_reindex(tmp_path: Path, registry
     assert runtime.dense.count_by_project(str(root)) > 0
 
 
+def test_interrupted_index_resumes_from_last_batch(tmp_path: Path):
+    """Mid-index crash (or killed Claude session) must not lose completed batches.
+
+    Per-batch write order is dense upsert -> file_meta record, so every file
+    with a meta row already has its chunks persisted. A later run with
+    incremental=True skips those files and indexes only the remainder.
+    """
+    pytest.importorskip("tree_sitter", reason="tree-sitter not installed")
+    pytest.importorskip("tree_sitter_python", reason="tree-sitter-python not installed")
+    pytest.importorskip("lancedb", reason="lancedb not installed")
+    pytest.importorskip("bm25s", reason="bm25s not installed")
+
+    import numpy as np
+
+    class _FlakyEmbedder:
+        """Succeeds on the first batch, then raises — simulates a killed session."""
+
+        def __init__(self) -> None:
+            self.calls = 0
+            self.fail_from_call = 2
+
+        def encode_corpus(self, texts: list[str], batch_size: int = 64):
+            self.calls += 1
+            if self.calls >= self.fail_from_call:
+                raise RuntimeError("session killed mid-index")
+            return np.zeros((len(texts), 4), dtype=np.float32)
+
+    root = tmp_path / "project"
+    root.mkdir()
+    files = []
+    for name in ("a", "b", "c"):
+        f = root / f"{name}.py"
+        f.write_text(f"def func_{name}():\n    return 1\n")
+        files.append(f)
+
+    runtime = _build_real_runtime(tmp_path)
+    embedder = _FlakyEmbedder()
+    runtime.chunker._embedder = embedder
+
+    with pytest.raises(RuntimeError, match="session killed"):
+        asyncio.run(
+            runtime.chunker.index_files_batched_async(
+                files, incremental=True, file_batch_size=1
+            )
+        )
+
+    # First batch persisted: chunks in dense, meta row recorded.
+    assert runtime.dense.count_by_project(str(root)) > 0
+    done_files = runtime.chunker.files_under(str(root))
+    assert len(done_files) == 1
+
+    # "New session": embedder healthy again. Only the remaining files index.
+    embedder.fail_from_call = 999
+    stats = asyncio.run(
+        runtime.chunker.index_files_batched_async(files, incremental=True, file_batch_size=1)
+    )
+
+    assert stats["skipped"] == 1
+    assert stats["files"] == 2
+    assert sorted(runtime.chunker.files_under(str(root))) == sorted(str(f) for f in files)
+    assert runtime.dense.count_by_project(str(root)) >= 3
+
+
 def test_run_skips_project_with_reporag_ignore(tmp_path: Path):
     root = tmp_path / "proj"
     root.mkdir()
