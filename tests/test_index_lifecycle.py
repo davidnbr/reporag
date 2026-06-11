@@ -171,7 +171,7 @@ def test_registry_totals_match_project_chunk_count(tmp_path: Path, registry_path
     assert entry_after["chunks"] == dense.count_by_project(str(root))
 
 
-def test_orphaned_file_chunks_purged_on_reindex(tmp_path: Path):
+def test_orphaned_file_chunks_purged_on_reindex(tmp_path: Path, registry_path):
     pytest.importorskip("tree_sitter", reason="tree-sitter not installed")
     pytest.importorskip("tree_sitter_python", reason="tree-sitter-python not installed")
     pytest.importorskip("lancedb", reason="lancedb not installed")
