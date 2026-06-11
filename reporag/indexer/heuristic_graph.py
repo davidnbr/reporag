@@ -62,20 +62,41 @@ def extract_imports(file_path: Path, root: Path) -> list[HeuristicEdge]:
 
 # ── Python ───────────────────────────────────────────────────────────────────
 
-_PY_IMPORT = re.compile(r"^(?:from\s+([\w.]+)\s+import|import\s+([\w.,\s]+))", re.MULTILINE)
+_PY_IMPORT = re.compile(
+    r"^(?:from\s+([.\w]+)\s+import|import[ \t]+([\w.]+(?:[ \t]*,[ \t]*[\w.]+)*))",
+    re.MULTILINE,
+)
 
 
 def _python_imports(src: str, file_path: Path, root: Path) -> list[HeuristicEdge]:
     edges: list[HeuristicEdge] = []
     for m in _PY_IMPORT.finditer(src):
-        module = m.group(1) or m.group(2).split(",")[0].strip()
-        resolved = _resolve_python_module(module, file_path, root)
-        edges.append(HeuristicEdge(str(file_path), resolved, module))
+        modules = [m.group(1)] if m.group(1) else [s.strip() for s in m.group(2).split(",")]
+        for module in modules:
+            resolved = _resolve_python_module(module, file_path, root)
+            edges.append(HeuristicEdge(str(file_path), resolved, module))
     return edges
 
 
 def _resolve_python_module(module: str, src_file: Path, root: Path) -> str:
     """Try to resolve dotted module name to a file path within the project."""
+    if module.startswith("."):
+        # Relative import: leading dots count parent levels above src_file's package.
+        stripped = module.lstrip(".")
+        for _ in range(len(module) - len(stripped) - 1):
+            src_file = src_file.parent
+        base = src_file.parent
+        parts = stripped.split(".") if stripped else []
+        candidates = (
+            [(base / Path(*parts)).with_suffix(".py"), base / Path(*parts) / "__init__.py"]
+            if parts
+            else [base / "__init__.py"]
+        )
+        for c in candidates:
+            if c.exists():
+                return str(c)
+        return module
+
     parts = module.split(".")
     candidates = [
         root / Path(*parts).with_suffix(".py"),
