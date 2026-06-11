@@ -247,6 +247,116 @@ def test_orphaned_file_chunks_purged_on_reindex(tmp_path: Path):
     assert dense._table.search().where(f"file_path = '{b_path}'").to_list() == []
 
 
+def _build_real_runtime(tmp_path: Path) -> SimpleNamespace:
+    from reporag.indexer.chunker import ChunkIndexer
+    from reporag.indexer.graph_builder import GraphDB
+    from reporag.retrieval.dense import DenseIndex
+    from reporag.retrieval.sparse import BM25Index
+
+    dim = 4
+
+    class _FakeEmbedder:
+        def encode_corpus(self, texts: list[str], batch_size: int = 64):
+            import numpy as np
+
+            return np.zeros((len(texts), dim), dtype=np.float32)
+
+    data = tmp_path / "data"
+    graph_db = GraphDB(data / "dependency_graph.db")
+    dense = DenseIndex(data, dim=dim)
+    chunker = ChunkIndexer(
+        data_dir=data,
+        embedder=_FakeEmbedder(),
+        dense_index=dense,
+        bm25_index=BM25Index(),
+        graph_db=graph_db,
+    )
+    return SimpleNamespace(
+        chunker=chunker,
+        dense=dense,
+        graph_db=graph_db,
+        reranker=None,
+        reload_graph=Mock(),
+        index_sem=asyncio.Semaphore(1),
+        config=SimpleNamespace(index_batch_size=20),
+        index_tasks={},
+    )
+
+
+def _start_task(runtime: SimpleNamespace, task_id: str, root: Path, total_files: int) -> None:
+    runtime.index_tasks[task_id] = IndexTask(
+        task_id=task_id,
+        project=str(root),
+        started_at=time.monotonic(),
+        total_files=total_files,
+    )
+
+
+def test_orphan_only_run_refreshes_registry(tmp_path: Path, registry_path):
+    """Regression: 0 changed files + purged orphans must still update registry totals."""
+    pytest.importorskip("tree_sitter", reason="tree-sitter not installed")
+    pytest.importorskip("tree_sitter_python", reason="tree-sitter-python not installed")
+    pytest.importorskip("lancedb", reason="lancedb not installed")
+    pytest.importorskip("bm25s", reason="bm25s not installed")
+
+    proj = registry_path
+    root = tmp_path / "project"
+    root.mkdir()
+    a_file = root / "a.py"
+    b_file = root / "b.py"
+    a_file.write_text("def func_a():\n    return 1\n")
+    b_file.write_text("def func_b():\n    return 2\n")
+
+    runtime = _build_real_runtime(tmp_path)
+
+    _start_task(runtime, "t1", root, 2)
+    asyncio.run(_run_index_bg("t1", root, [a_file, b_file], incremental=True, runtime=runtime))
+    chunks_before = proj.get(str(root))["chunks"]
+    assert chunks_before > 0
+
+    # Delete b.py; a.py unchanged — orphan-purge-only run.
+    b_file.unlink()
+    _start_task(runtime, "t2", root, 1)
+    asyncio.run(_run_index_bg("t2", root, [a_file], incremental=True, runtime=runtime))
+
+    assert runtime.index_tasks["t2"].indexed_files == 0
+    entry = proj.get(str(root))
+    assert entry["chunks"] == runtime.dense.count_by_project(str(root))
+    assert entry["chunks"] < chunks_before
+
+
+def test_desync_meta_without_chunks_forces_full_reindex(tmp_path: Path, registry_path):
+    """Regression: file_meta.db rows + empty dense store must not skip all files."""
+    pytest.importorskip("tree_sitter", reason="tree-sitter not installed")
+    pytest.importorskip("tree_sitter_python", reason="tree-sitter-python not installed")
+    pytest.importorskip("lancedb", reason="lancedb not installed")
+    pytest.importorskip("bm25s", reason="bm25s not installed")
+
+    root = tmp_path / "project"
+    root.mkdir()
+    py_file = root / "a.py"
+    py_file.write_text("def func_a():\n    return 1\n")
+
+    runtime = _build_real_runtime(tmp_path)
+
+    _start_task(runtime, "t1", root, 1)
+    asyncio.run(_run_index_bg("t1", root, [py_file], incremental=True, runtime=runtime))
+    assert runtime.dense.count_by_project(str(root)) > 0
+
+    # Simulate dense store wipe while file_meta.db survives.
+    safe_root = str(root).replace("'", "''")
+    runtime.dense._table.delete(f"file_path LIKE '{safe_root}/%'")
+    assert runtime.dense.count_by_project(str(root)) == 0
+    assert runtime.chunker.files_under(str(root)) != []
+
+    _start_task(runtime, "t2", root, 1)
+    asyncio.run(_run_index_bg("t2", root, [py_file], incremental=True, runtime=runtime))
+
+    assert runtime.index_tasks["t2"].status == "done"
+    assert runtime.index_tasks["t2"].indexed_files == 1
+    assert runtime.dense.count_by_project(str(root)) > 0
+
+
 def test_run_skips_project_with_reporag_ignore(tmp_path: Path):
     root = tmp_path / "proj"
     root.mkdir()

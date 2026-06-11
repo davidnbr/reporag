@@ -117,6 +117,33 @@ async def _run_index_bg(
                 runtime.graph_db.commit()
                 logger.info("Index task %s: purged %d orphaned files", task_id, len(orphans))
 
+            def update_registry() -> None:
+                try:
+                    from reporag.projects import update as _reg_update
+
+                    total_chunks = runtime.dense.count_by_project(str(root))
+                    total_files = runtime.chunker.count_files(str(root))
+                    _reg_update(str(root), total_chunks, total_files)
+                except Exception:
+                    logger.exception("Index task %s: registry update failed", task_id)
+
+            # Desync guard: file_meta.db says files are indexed but the dense
+            # store has no chunks for this project (e.g. LanceDB dir wiped,
+            # meta db survived). Incremental would skip every file forever.
+            if (
+                incremental
+                and files
+                and known_files
+                and runtime.dense.count_by_project(str(root)) == 0
+            ):
+                logger.warning(
+                    "Index task %s: file metadata exists but no chunks found for %s — "
+                    "forcing full reindex",
+                    task_id,
+                    root,
+                )
+                incremental = False
+
             def on_batch(files_done: int, chunks_done: int, skipped: int) -> None:
                 task.indexed_files = files_done
                 task.indexed_chunks = chunks_done
@@ -135,8 +162,11 @@ async def _run_index_bg(
             task.skipped_files = chunk_stats["skipped"]
 
             if chunk_stats["files"] == 0:
-                # Nothing changed — skip graph rebuild, reload, reranker
-                # invalidation, and registry update entirely.
+                # Nothing changed — skip graph rebuild, reload, and reranker
+                # invalidation. Registry totals only need refreshing when
+                # orphans were purged (chunk counts changed).
+                if orphans:
+                    update_registry()
                 task.status = "done"
                 task.finished_at = time.monotonic()
                 logger.info(
@@ -161,14 +191,7 @@ async def _run_index_bg(
             task.graph_edges_heuristic = graph_stats.get("heuristic", 0)
             task.status = "done"
             task.finished_at = time.monotonic()
-            try:
-                from reporag.projects import update as _reg_update
-
-                total_chunks = runtime.dense.count_by_project(str(root))
-                total_files = runtime.chunker.count_files(str(root))
-                _reg_update(str(root), total_chunks, total_files)
-            except Exception:
-                logger.exception("Index task %s: registry update failed", task_id)
+            update_registry()
             logger.info(
                 "Index task %s done: %d files, %d chunks (%.1fs)",
                 task_id,
