@@ -136,3 +136,9 @@ class DenseIndex:
         """Return total number of indexed chunks."""
         self._open_or_create_table()
         return self._table.count_rows()
+
+    def count_by_project(self, project_root: str) -> int:
+        """Return number of chunks whose file_path is under project_root."""
+        self._open_or_create_table()
+        safe = project_root.rstrip("/").replace("'", "''")
+        return self._table.count_rows(f"file_path LIKE '{safe}/%'")

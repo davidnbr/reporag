@@ -111,6 +111,13 @@ class ChunkIndexer:
                 )
         self._graph_db.commit()
 
+    def count_files(self, root: str) -> int:
+        """Return number of file_index rows under `root`."""
+        row = self._meta_conn.execute(
+            "SELECT COUNT(*) FROM file_index WHERE file_path LIKE ?", (root.rstrip("/") + "/%",)
+        ).fetchone()
+        return row[0] if row else 0
+
     def index_files(
         self,
         files: list[Path],
@@ -284,8 +291,12 @@ class ChunkIndexer:
 
             await asyncio.sleep(0)  # yield to event loop between batches
 
-        # BM25 rebuild once at end (full scan of LanceDB — fast, <10s for 200k LOC)
-        await loop.run_in_executor(None, self._rebuild_bm25)
+        # BM25 rebuild once at end (full scan of LanceDB — fast, <10s for 200k LOC).
+        # Skip when nothing changed: an empty-table .search().to_list() returns
+        # ALL rows in LanceDB, so a no-op rebuild would still scan + rewrite the
+        # entire index on every call.
+        if total_chunks > 0:
+            await loop.run_in_executor(None, self._rebuild_bm25)
 
         return {"files": files_done, "chunks": total_chunks, "skipped": skipped}
 

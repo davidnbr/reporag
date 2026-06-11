@@ -95,6 +95,23 @@ async def _run_index_bg(
                 on_batch=on_batch,
             )
 
+            task.indexed_files = chunk_stats["files"]
+            task.indexed_chunks = chunk_stats["chunks"]
+            task.skipped_files = chunk_stats["skipped"]
+
+            if chunk_stats["files"] == 0:
+                # Nothing changed — skip graph rebuild, reload, reranker
+                # invalidation, and registry update entirely.
+                task.status = "done"
+                task.finished_at = time.monotonic()
+                logger.info(
+                    "Index task %s done: no changes (%d files skipped, %.1fs)",
+                    task_id,
+                    task.skipped_files,
+                    task.finished_at - task.started_at,
+                )
+                return
+
             from reporag.indexer.graph_builder import build_graph_for_project
 
             loop = asyncio.get_running_loop()
@@ -107,17 +124,16 @@ async def _run_index_bg(
 
             task.graph_edges_scip = graph_stats.get("scip", 0)
             task.graph_edges_heuristic = graph_stats.get("heuristic", 0)
-            task.indexed_files = chunk_stats["files"]
-            task.indexed_chunks = chunk_stats["chunks"]
-            task.skipped_files = chunk_stats["skipped"]
             task.status = "done"
             task.finished_at = time.monotonic()
             try:
                 from reporag.projects import update as _reg_update
 
-                _reg_update(str(root), task.indexed_chunks, task.indexed_files)
+                total_chunks = runtime.dense.count_by_project(str(root))
+                total_files = runtime.chunker.count_files(str(root))
+                _reg_update(str(root), total_chunks, total_files)
             except Exception:
-                pass
+                logger.exception("Index task %s: registry update failed", task_id)
             logger.info(
                 "Index task %s done: %d files, %d chunks (%.1fs)",
                 task_id,
