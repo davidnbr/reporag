@@ -1,0 +1,1052 @@
+[
+  {
+    "name": "Error",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/types/failure.go",
+    "language": "go",
+    "chunk_type": "method",
+    "query": "How does `Error` work? Walk me through its logic.",
+    "baseline": "No `Error` class or custom function exists in this codebase. Only match is a plain string literal in `scripts/llm_eval.py:263`:\n\n```python\nprint(\"Error: 'claude' CLI not found. Install Claude Code first.\", file=sys.stderr)\n```\n\nJust a formatted stderr message, not a class or abstraction. What specifically were you expecting to find?",
+    "rag": "No single `Error` type/function in provided context. Two distinct error patterns visible:\n\n**Python side \u2014 dict-based errors**\n\nTools return plain dicts with an `\"error\"` key:\n```python\nreturn {\"error\": \"content is required\"}  # memory.py:25\nreturn {\"error\": \"query is required\"}    # query.py:38\n```\nCallers check `\"error\" in result` (see `test_status_missing_project_returns_error:271`). `IndexTask` also stores `error: str | None` for async task failures.\n\n**Go side \u2014 sentinel + typed errors**\n\n`exitCode` in `cmd/root.go:40` distinguishes three cases:\n- `pipeline.ErrRejected` \u2192 exit 1\n- `pipeline.ErrIterationLimit` \u2192 exit 1  \n- `*types.UserError` (typed, checked via `errors.As`) \u2192 exit 1\n- anything else \u2192 exit 2\n\nNeed more specifics? Which `Error` \u2014 a particular file, type, or function?",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/dense.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/chunker.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/ast_parser.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/loop.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/cmd/root.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 3
+      },
+      "rag": {
+        "correctness": 2,
+        "completeness": 2,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Baseline completely misses the Go UserError.Error() method; RAG correctly surfaces UserError as a typed error but never explains the actual implementation (return e.Message), so both fail to answer the question.",
+    "error": null
+  },
+  {
+    "name": "TestValidateFile_DefaultFileIsValid",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "What does `TestValidateFile_DefaultFileIsValid` do and when is it called?",
+    "baseline": "`TestValidateFile_DefaultFileIsValid` not found in codebase. Doesn't exist here.",
+    "rag": "`TestValidateFile_DefaultFileIsValid` (lines 107\u2013111):\n\n1. Creates temp dir\n2. Calls `config.Init(dir)` \u2014 writes the default `.flow-eng.yaml` to that dir\n3. Calls `config.ValidateFile` on that file\n\n**Purpose**: ensures whatever `Init` generates passes validation. Guards against `Init` producing a config that would immediately fail `ValidateFile`.\n\n**When called**: by `go test` \u2014 it's a standard Go test, no special trigger. Runs whenever the `internal/config` package tests execute (e.g., `go test ./internal/config/...`).",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline incorrectly claims the function doesn't exist; RAG accurately describes all three steps, the guard-against-broken-init purpose, and correct invocation context.",
+    "error": null
+  },
+  {
+    "name": "TestValidate_MissingSignature",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/validate_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `TestValidate_MissingSignature` in this codebase.",
+    "baseline": "`TestValidate_MissingSignature` not found in codebase.",
+    "rag": "`TestValidate_MissingSignature` at `internal/spec/validate_test.go:36`:\n\n1. Starts with `validSpecFile()` \u2014 a valid baseline spec struct\n2. Clears `sf.Signature = \"\"`\n3. Calls `Validate(sf)`\n4. Asserts result is invalid (`result.Valid == false`)\n5. Asserts exactly **one** error\n6. Asserts that error message contains `\"signature\"`\n\nPattern matches sibling tests (`TestValidate_MissingFunctionName` at line 27) \u2014 each blanks one required field, expects validation to catch it with a field-named error message.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "RAG fully described all five steps, correct file location, and sibling test pattern; baseline admitted ignorance rather than hallucinating.",
+    "error": null
+  },
+  {
+    "name": "New",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/httpclient/client.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Where is `New` defined and what is its purpose?",
+    "baseline": "`New` not found in this codebase. No Go files exist, and no Python definition matches. The symbol may not exist here \u2014 could you clarify context or which file you saw it in?",
+    "rag": "`New` defined at `/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go:26`.\n\nConstructs an `Orchestrator` struct wiring together three dependencies: an `assistant.Connector`, an `executor.TestGenerator`, and a `pkgexecutor.Executor`.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/ast_parser.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/cmd/run.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/cmd/root.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/node.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/python.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 1,
+        "completeness": 2,
+        "hallucination": 2
+      }
+    },
+    "reasoning": "Baseline wrongly denies New exists; RAG retrieves wrong New (orchestrator.go instead of httpclient/client.go) and describes unrelated Orchestrator construction.",
+    "error": null
+  },
+  {
+    "name": "TestSave_WritesCorrectPath",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/save_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "How does `TestSave_WritesCorrectPath` work? Walk me through its logic.",
+    "baseline": "`TestSave_WritesCorrectPath` not found anywhere in this repo. May be in a different project or doesn't exist yet.",
+    "rag": "`TestSave_WritesCorrectPath` not in provided context. None of the shown snippets contain it.\n\nWant me to search the codebase for it?",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/ast_parser.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 3
+      },
+      "rag": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Both responses falsely claim the function doesn't exist; baseline invents an explanation (different project/nonexistent), RAG at least limits its claim to provided context without fabricating further.",
+    "error": null
+  },
+  {
+    "name": "TestLoad_ValidFile",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/engine_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "What does `TestLoad_ValidFile` do and when is it called?",
+    "baseline": "`TestLoad_ValidFile` not found in this repo. Not part of this codebase.",
+    "rag": "`TestLoad_ValidFile` not present in provided context. None of the snippets contain it.\n\nClosest match: `TestLoadEffective_ValidConfig` (lines 346\u2013354) \u2014 inits a temp dir, calls `config.LoadEffective`, asserts runtime=`\"python\"` and model=`\"claude-sonnet-4-6\"`. Called by Go test runner via `go test`.\n\nWant me to search the actual codebase for `TestLoad_ValidFile`?",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 2,
+        "completeness": 2,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Both miss the actual function (not in their context), but RAG adds value by surfacing a structurally similar test and offering to search, while baseline gives a flat denial with no recovery path.",
+    "error": null
+  },
+  {
+    "name": "TestLoadEffective_NoProjectFile_UsesDefaults",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `TestLoadEffective_NoProjectFile_UsesDefaults` in this codebase.",
+    "baseline": "`TestLoadEffective_NoProjectFile_UsesDefaults` not found in this codebase.",
+    "rag": "`TestLoadEffective_NoProjectFile_UsesDefaults` (config_test.go:368):\n\n1. Creates empty temp dir \u2014 no `.flow-eng.yaml` present\n2. Calls `config.LoadEffective(dir, CLIOverrides{})` with empty overrides\n3. Asserts no error \u2014 missing config file is valid, not an error\n4. Asserts `Model == \"claude-sonnet-4-6\"` and `Iterations == 3` \u2014 both are hardcoded defaults\n\nContrast with `TestValidateFile`-style tests: `LoadEffective` combines `Merge` (which already handles missing files via defaults) + validation. The no-file path exercises the full stack without any user config \u2014 pure defaults survive validation unchanged.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline correctly admits ignorance; RAG accurately describes all four assertions, the temp-dir setup, and correctly contextualizes LoadEffective as merge+validate with no invented APIs.",
+    "error": null
+  },
+  {
+    "name": "TestLoadEffective_ShowOutputContainsHeader",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Where is `TestLoadEffective_ShowOutputContainsHeader` defined and what is its purpose?",
+    "baseline": "`TestLoadEffective_ShowOutputContainsHeader` not found anywhere in this repo.",
+    "rag": "Defined at `/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go:377`.\n\nVerifies `config.Show()` output starts with `#` \u2014 enforcing an informational header comment in the human-readable config display.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "RAG correctly identifies file location and accurately describes the assertion that Show() output must start with '#'; baseline falsely claims the function doesn't exist.",
+    "error": null
+  },
+  {
+    "name": "stripMarkdownFences",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/engine.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "How does `stripMarkdownFences` work? Walk me through its logic.",
+    "baseline": "`stripMarkdownFences` not found in this codebase. Not defined here.",
+    "rag": "`stripMarkdownFences` not in provided context \u2014 all snippets are Python, no JS/TS files shown. Not part of this codebase based on what's here.\n\nWant me to search the repo for it?",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/rrf.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/sparse.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/chunker.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/embedder.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/sliding_window.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/sliding_window.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/sliding_window.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/graph_builder.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 3
+      }
+    },
+    "reasoning": "Both responses incorrectly claim the function does not exist; RAG additionally fabricates a false claim about context content being Python-only, making it slightly worse on hallucination.",
+    "error": null
+  },
+  {
+    "name": "TestLoadTestCases_ValidFile",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "What does `TestLoadTestCases_ValidFile` do and when is it called?",
+    "baseline": "`TestLoadTestCases_ValidFile` not found in this repo. May be from external codebase or doesn't exist here.",
+    "rag": "Writes one `TestCase` to a temp JSON file, calls `LoadTestCases(path)`, asserts it returns exactly that case with correct name.\n\nCalled by `go test` \u2014 no explicit caller. It's a unit test for the `LoadTestCases` function in `internal/executor/testgen_test.go:91`.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 2,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "RAG precisely describes the marshal-write-load-assert flow and correct file location; baseline honestly admits not finding it rather than hallucinating, but provides no useful information.",
+    "error": null
+  },
+  {
+    "name": "TestHTTPTestGenerator_Generate_ShallowWarning",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `TestHTTPTestGenerator_Generate_ShallowWarning` in this codebase.",
+    "baseline": "`TestHTTPTestGenerator_Generate_ShallowWarning` not found in this codebase. Check if it belongs to a different repo or was renamed.",
+    "rag": "`TestHTTPTestGenerator_Generate_ShallowWarning` (lines 238\u2013257):\n\n**Setup**: Spins up `httptest.NewServer` that returns two happy-path-only AI cases \u2014 `\"basic case\"` and `\"normal run\"` \u2014 neither containing edge/boundary keywords in name or input.\n\n**Execution**: Calls `gen.Generate(...)` with no dev cases.\n\n**Assertions**:\n1. `require.NoError` \u2014 generation succeeds (shallow detection is non-fatal)\n2. `assert.Len(t, cases, 2)` \u2014 both AI cases returned\n3. `require.NotNil(t, warn)` + `assert.Contains(t, warn.Message, \"happy path\")` \u2014 `detectShallowTests` fired and returned a `*types.UserError`\n\n**What it proves**: When AI returns only happy-path tests (no edge/boundary words in `Name` or `Input`), `Generate` still returns the cases cleanly but surfaces a non-nil `warning` \u2014 matching the `([]TestCase, *UserError, error)` return contract. The warning bubbles up through `stageTestGen` \u2192 printed to stderr (`TestOrchestrator_ShallowTestWarning_NonFatal` covers that path).",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/scripts/generate_scip_pb2.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline refused to answer (wrong but not hallucinated); RAG accurately described the httptest server setup, both AI cases, all three assertions, the shallow-warning contract, and the return signature \u2014 fully matching the ground truth.",
+    "error": null
+  },
+  {
+    "name": "<anonymous>",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+    "language": "go",
+    "chunk_type": "class",
+    "query": "Where is `<anonymous>` defined and what is its purpose?",
+    "baseline": "`<anonymous>` is a fallback string literal returned by a name-extraction helper in `ast_parser.py:145`.\n\nThe function walks a tree-sitter AST node looking for its name \u2014 first checking known field names (e.g. `name`, `declarator`), then scanning children for identifier node types. If none found, returns `\"<anonymous>\"` to represent unnamed constructs (e.g. anonymous structs, lambdas, unnamed declarators) during chunk indexing.",
+    "rag": "Need more context \u2014 `<anonymous>` isn't a Go identifier. Likely means an anonymous function (closure) or anonymous struct literal.\n\nWhich file/context did you see `<anonymous>`? It could be:\n- A stack trace (shows `<anonymous>` for unnamed goroutines or closures)\n- A specific line you're looking at\n\nPoint me to where you saw it and I'll find it.",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/effective.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/effective.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 2,
+        "hallucination": 1
+      },
+      "rag": {
+        "correctness": 2,
+        "completeness": 1,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline fabricates a Python ast_parser.py explanation unrelated to the Go struct in orchestrator_test.go; RAG correctly refuses to invent an answer but fails to identify the capturingTestGen struct as the actual ground truth.",
+    "error": null
+  },
+  {
+    "name": "<anonymous>",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/types/testcase.go",
+    "language": "go",
+    "chunk_type": "class",
+    "query": "How does `<anonymous>` work? Walk me through its logic.",
+    "baseline": "No `<anonymous>` specified. What function, class, or symbol you want explained?",
+    "rag": "`<anonymous>` isn't a specific identifier \u2014 looks like a template placeholder that wasn't filled in. Which function, type, or component did you mean to ask about?",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/effective.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/effective.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/types/testcase.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 3,
+        "completeness": 2,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 3,
+        "completeness": 2,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both correctly identify the malformed placeholder rather than hallucinating an answer; neither engages with the actual ground truth struct, but neither invents anything either.",
+    "error": null
+  },
+  {
+    "name": "<anonymous>",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+    "language": "go",
+    "chunk_type": "class",
+    "query": "What does `<anonymous>` do and when is it called?",
+    "baseline": "`_get_node_name` (ast_parser.py:127) extracts the name identifier from a tree-sitter AST node. It tries:\n\n1. Language-specific name fields (e.g. `\"name\"`)\n2. Recurse into `declarator` child (C/C++)\n3. First child whose type is `identifier`, `type_identifier`, etc.\n\nReturns `\"<anonymous>\"` as fallback when none of those succeed \u2014 i.e. the AST node has no extractable name (anonymous functions, unnamed structs, arrow functions, etc.).\n\nCalled during chunk extraction when labeling code symbols for indexing.",
+    "rag": "`<anonymous>` refers to the inline struct in `testAnthropicResponse.Content`:\n\n```go\nContent []struct {\n    Type string `json:\"type\"`\n    Text string `json:\"text\"`\n} `json:\"content\"`\n```\n\nIt's an unnamed struct used as the element type of the `Content` slice \u2014 no separate named type declared. Called implicitly when `json.Unmarshal` decodes the Anthropic API response body into `testAnthropicResponse`. Each item in the JSON `content` array maps to one instance of this anonymous struct.",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/types/testcase.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/interface.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 2,
+        "completeness": 2,
+        "hallucination": 3
+      }
+    },
+    "reasoning": "Neither response describes the Orchestrator struct; baseline invents a Python AST explanation unrelated to Go, while RAG correctly stays in Go and explains anonymous struct semantics but applies it to an unrelated test struct rather than the actual ground truth.",
+    "error": null
+  },
+  {
+    "name": "TestRunner_WorkingDirScopedToProjectRoot",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `TestRunner_WorkingDirScopedToProjectRoot` in this codebase.",
+    "baseline": "`TestRunner_WorkingDirScopedToProjectRoot` not found in this codebase.",
+    "rag": "**`TestRunner_WorkingDirScopedToProjectRoot`** (runner_test.go:122)\n\nVerifies that `Runner.run()` executes subprocess with working directory set to `projectRoot`, not some temp dir or caller's cwd.\n\n**Mechanics:**\n\n1. Creates a real temp dir via `t.TempDir()` \u2014 this becomes `projectRoot`\n2. Code under test: `import os\\nprint(os.getcwd())\\n` \u2014 prints subprocess's cwd\n3. `ExpectedOutput` set to `projectRoot` \u2014 so the runner's output-comparison logic checks cwd matches\n4. Asserts `rr.stdout` contains the first `len(projectRoot)-5` chars of `projectRoot`\n\n**The `-5` tolerance** (`rr.stdout` contains `projectRoot[:len(projectRoot)-5]`) handles macOS/Linux symlink suffixes \u2014 e.g. `/private/var/folders/...` vs `/var/folders/...`. Slicing off the last 5 chars gives a prefix that's stable across symlink resolution differences.\n\n**What it proves:** `Runner` sets `cmd.Dir = projectRoot` (or equivalent) before `cmd.Start()` \u2014 so user code runs scoped to the project, not wherever the Go process lives.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/dense.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/graph_builder.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/merge.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 4,
+        "completeness": 4,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline falsely claims function not found; RAG accurately describes all key mechanics including the -5 symlink tolerance, but omits goleak and python3 skip guard.",
+    "error": null
+  },
+  {
+    "name": "exitCode",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/cmd/root.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Where is `exitCode` defined and what is its purpose?",
+    "baseline": "`exitCode` not found anywhere in `/home/davidnbr98/Projects/reporag`. Not defined here.",
+    "rag": "Defined at `cmd/root.go:40`.\n\nMaps pipeline errors to process exit codes:\n- **exit 1** \u2014 expected failures: `ErrRejected`, `ErrIterationLimit`, delta errors, `UserError` (CI-friendly; script can detect rejection vs crash)\n- **exit 2** \u2014 unexpected internal/pipeline errors\n\nPurpose: lets callers distinguish \"LLM output was rejected/limit hit\" (exit 1) from \"something crashed\" (exit 2).",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/ask.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/sparse.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/embedder.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/ast_parser.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/main.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 2,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 4,
+        "completeness": 5,
+        "hallucination": 3
+      }
+    },
+    "reasoning": "RAG correctly maps all three exit-1 error types and the exit-2 fallback, but invents 'delta errors' not present in the ground truth; baseline is technically accurate about reporag scope but provides no useful answer.",
+    "error": null
+  },
+  {
+    "name": "<anonymous>",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/engine.go",
+    "language": "go",
+    "chunk_type": "class",
+    "query": "How does `<anonymous>` work? Walk me through its logic.",
+    "baseline": "Looks like placeholder wasn't filled in. What function/class/file you want explained?",
+    "rag": "`<anonymous>` placeholder not filled in \u2014 looks like a template variable that wasn't substituted.\n\nWhich specific function, type, or component did you mean to ask about?",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/effective.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/effective.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/types/testcase.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 4,
+        "completeness": 3,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 4,
+        "completeness": 3,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both correctly identify the unfilled placeholder and request clarification rather than hallucinating an answer about the struct.",
+    "error": null
+  },
+  {
+    "name": "mergeConfig",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/config/merge.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "What does `mergeConfig` do and when is it called?",
+    "baseline": "`mergeConfig` not found anywhere in this codebase.",
+    "rag": "`mergeConfig(dst, src Config) Config` applies non-zero fields from `src` onto `dst`. Each field only overwrites if `src`'s value is non-empty/non-zero \u2014 so zero values (empty string, 0) are treated as \"not set\" and leave `dst` unchanged.\n\nCalled twice in `Merge`:\n1. Global layer merged onto defaults\n2. Project layer merged onto that result\n\nThen `applyCLIOverrides` handles CLI flags (layer 4). Order: defaults \u2192 global config \u2192 project config \u2192 CLI flags.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/config.py",
+      "/home/davidnbr98/Projects/reporag/reporag/config.py",
+      "/home/davidnbr98/Projects/reporag/reporag/config.py",
+      "/home/davidnbr98/Projects/reporag/reporag/config.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/pagerank.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/merge.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/merge.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/merge.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 3
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 4,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline falsely claims function doesn't exist; RAG correctly describes zero-value guard pattern and layered merge order, though call-site details (Merge, applyCLIOverrides) can't be verified from ground truth alone.",
+    "error": null
+  },
+  {
+    "name": "TestBuildCorrectionPrompt_IncludesFullSpec",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `TestBuildCorrectionPrompt_IncludesFullSpec` in this codebase.",
+    "baseline": "`TestBuildCorrectionPrompt_IncludesFullSpec` not found in this codebase. Not a function here.",
+    "rag": "Test verifies `buildCorrectionPrompt` embeds all spec fields and failure messages into the returned prompt string.\n\n**Setup:** Constructs a `types.SpecFile` with every field populated \u2014 `FunctionName`, `Signature`, `Description`, `Invariants`, `EdgeCases`, `IOPairs` \u2014 plus one failure message string.\n\n**Call:** `buildCorrectionPrompt(spec, msgs)` \u2014 this is an internal pipeline function (in `internal/pipeline/`) that formats a correction prompt for the LLM when generated code fails tests.\n\n**Assertions:** `assert.Contains` checks that every spec field appears verbatim in the output. This ensures the LLM receives full context when asked to fix failing code:\n- `\"add\"` \u2014 function name\n- `\"def add(a, b)\"` \u2014 signature\n- `\"adds two numbers\"` \u2014 description  \n- `\"result >= 0\"` \u2014 invariant\n- `\"negative inputs\"` \u2014 edge case\n- `\"1,1\"` \u2014 IO pair input\n- `\"FAIL test_add\\n  actual: 0\"` \u2014 failure message\n\n**Purpose:** Regression guard. If `buildCorrectionPrompt` drops any field (e.g. forgets to render invariants), the LLM gets incomplete context and correction quality degrades silently. This test catches that at the prompt-construction layer, before any LLM call.\n\nCompanion tests (`_FailureWindowCappedAt2`, `_SingleFailure`) separately verify failure message windowing \u2014 that the prompt includes exactly N `\"--- Failure\"` sections matching the input slice length.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/loop.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Baseline incorrectly claims the function doesn't exist; RAG accurately describes all spec fields, assertions, and purpose, with minor uncertainty on companion tests that aren't in the provided ground truth.",
+    "error": null
+  },
+  {
+    "name": "checkPython",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runtime_check.go",
+    "language": "go",
+    "chunk_type": "method",
+    "query": "Where is `checkPython` defined and what is its purpose?",
+    "baseline": "`checkPython` not found anywhere in this codebase.",
+    "rag": "`checkPython` not found anywhere in this codebase. May be from a different project or doesn't exist.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/python.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both responses wrongly claim checkPython doesn't exist despite ground truth showing it in internal/executor/runtime_check.go; RAG retrieval failed entirely.",
+    "error": null
+  },
+  {
+    "name": "TestValidate_MultipleErrors",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/validate_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "How does `TestValidate_MultipleErrors` work? Walk me through its logic.",
+    "baseline": "Not in this repo. `TestValidate_MultipleErrors` doesn't exist in the codebase.",
+    "rag": "`TestValidate_MultipleErrors` not in provided context. Not shown in any of the snippets above.\n\nWant me to search the codebase for it?",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/ast_parser.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both responses falsely claim the test doesn't exist rather than explaining it, scoring 1 on correctness and completeness, though neither invents fake code so hallucination scores are 5.",
+    "error": null
+  },
+  {
+    "name": "validSpecFile",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/validate_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "What does `validSpecFile` do and when is it called?",
+    "baseline": "`validSpecFile` not found in codebase. Not defined here.",
+    "rag": "`validSpecFile` is a test helper in `internal/spec/validate_test.go:12`. Returns a fully-populated `types.SpecFile` with all required fields set \u2014 used as a baseline valid fixture.\n\nCalled in tests that need to mutate one field at a time to trigger a specific validation error (e.g. `sf.FunctionName = \"\"`), rather than constructing the whole struct per test. Not called in production code.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/chunker.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline claims function not found despite it existing; RAG correctly identifies file location, return value, and mutation-testing usage pattern.",
+    "error": null
+  },
+  {
+    "name": "TestWithRetry_ContextCancelled",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/httpclient/retry_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `TestWithRetry_ContextCancelled` in this codebase.",
+    "baseline": "`TestWithRetry_ContextCancelled` not found in codebase.",
+    "rag": "`TestWithRetry_ContextCancelled` doesn't exist in this codebase. Not in reporag or flow_eng_ai.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Both responses falsely claim the function doesn't exist despite ground truth showing it clearly does; neither describes the implementation at all.",
+    "error": null
+  },
+  {
+    "name": "Generate",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+    "language": "go",
+    "chunk_type": "method",
+    "query": "Where is `Generate` defined and what is its purpose?",
+    "baseline": "No `Generate` definition exists in this codebase. Not in Python, Go, or any other file. May be referencing something outside this repo \u2014 can you provide more context?",
+    "rag": "Defined: `internal/executor/testgen.go:40` on `HTTPTestGenerator`.\n\n**What it does:**\n1. Resolves API key + base URL from config\n2. Calls the test model API with retry (3x) via `callTestModelAPI`\n3. Merges AI-generated cases with developer-supplied `devCases` (`append(aiCases, devCases...)`)\n4. Runs `detectShallowTests` \u2014 non-fatal warning if tests look shallow\n5. Errors if zero total cases result\n\nReturns `([]TestCase, *UserError warning, error)`.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/scripts/generate_scip_pb2.py",
+      "/home/davidnbr98/Projects/reporag/reporag/config.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/graph_builder.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/graph_builder.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 3,
+        "completeness": 4,
+        "hallucination": 3
+      }
+    },
+    "reasoning": "Baseline wrongly claims Generate doesn't exist; RAG finds a plausible real implementation on HTTPTestGenerator but the ground truth only shows the mock (append(m.cases, devCases...) returning m.warning/m.err), so RAG's extra details (API key, retry, detectShallowTests) are unverifiable against the provided snippet.",
+    "error": null
+  },
+  {
+    "name": "TestWithRetry_NonHTTPError_NoRetry",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/httpclient/retry_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "How does `TestWithRetry_NonHTTPError_NoRetry` work? Walk me through its logic.",
+    "baseline": "`TestWithRetry_NonHTTPError_NoRetry` not found in this repo. Not part of this codebase \u2014 may be from a different project.",
+    "rag": "`retry_test.go:64\u201374`. Logic:\n\n1. **Setup** \u2014 plain `errors.New(\"connection refused\")`, not an `*HTTPError`. Counter starts at 0.\n2. **`WithRetry` called** with `maxAttempts=3`. On first call, fn returns the sentinel error.\n3. **`WithRetry` checks error type** \u2014 since it's not `*HTTPError`, retry logic doesn't trigger. Returns immediately after 1 attempt.\n4. **Assertions**:\n   - `calls == 1` \u2014 confirms no retry happened\n   - `errors.Is(err, sentinel)` \u2014 confirms original error passed through unwrapped\n\nKey invariant being tested: only `*HTTPError` (transient HTTP failures like 429/500) warrants retry. Network-level or logic errors bail fast and preserve the original error identity.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/ast_parser.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/engine_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "RAG correctly traced all four assertions and the retry-gate invariant; baseline refused entirely due to missing context.",
+    "error": null
+  },
+  {
+    "name": "TestValidateFile_ExplicitZeroIterations_IsRejected",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "What does `TestValidateFile_ExplicitZeroIterations_IsRejected` do and when is it called?",
+    "baseline": "Not in this repo. Function likely belongs to the `flow-eng` AI config validation tests referenced in obs 2430 \u2014 not part of `reporag`.",
+    "rag": "Test writes `iterations: 0` to a temp config file, calls `config.ValidateFile`, and asserts:\n1. Error returned\n2. Error wraps `*types.UserError`\n3. Error message contains `\"iterations\"`\n\n**Why 0 is special**: `ValidateFile` rejects explicit out-of-range values (valid range: 1\u201310) so users aren't silently surprised when `Merge` falls back to default `3`. Without this check, a user writing `iterations: 0` would get `3` iterations with no warning.\n\n**When called**: Only by Go's test runner (`go test ./internal/config/...`). Not called at runtime \u2014 it's a unit test for `config.ValidateFile`.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/chunker.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 2,
+        "completeness": 1,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "RAG response accurately describes all three assertions, explains the 1\u201310 range constraint and silent-fallback motivation from the code comments, and correctly identifies the test runner invocation; baseline deflects with no analysis of the actual implementation.",
+    "error": null
+  },
+  {
+    "name": "TestHTTPTestGenerator_Generate_ZeroAICasesDevCasesPresent",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `TestHTTPTestGenerator_Generate_ZeroAICasesDevCasesPresent` in this codebase.",
+    "baseline": "`TestHTTPTestGenerator_Generate_ZeroAICasesDevCasesPresent` not found anywhere in this codebase. Not present on branch `llm_benchmarking` or anywhere under `/home/davidnbr98/Projects/reporag`.",
+    "rag": "**What the test covers:**\n\nModel returns `[]` (empty JSON array). `parseTestCaseResponse` treats empty array as an error (`UserError` with \"zero test cases\"). Since `UserError` is not an HTTP transport error, `WithRetry` does **not** retry it \u2014 it propagates immediately as a fatal error.\n\n**The nuance being tested:** even though `devCases` is non-empty (one dev case present), that doesn't rescue the AI call. The retry/merge logic never runs because the parse step fails first \u2014 before any case merging can happen.\n\n**Flow:**\n\n```\ngen.Generate(ctx, cfg, spec, [devCase])\n  \u2192 HTTP call \u2192 server returns buildAnthropicResponse(t, [])\n  \u2192 parseTestCaseResponse(\"[]\") \u2192 UserError{\"zero test cases\"}\n  \u2192 WithRetry sees non-HTTPError \u2192 no retry, return error immediately\n  \u2192 Generate returns err (non-nil)\n```\n\n**Assert:** `require.Error(t, err)` \u2014 no `ErrorAs` check on type, just confirms fatal failure regardless of devCases being present.\n\n**Contrast with `TestOrchestrator_DevCases_Merged`:** that test injects a mock that returns AI cases successfully, then verifies dev+AI cases merge. This test shows the merge never happens if the AI parse step itself errors.",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline correctly admits ignorance (no hallucination) but provides zero information; RAG accurately traces the full execution path including UserError propagation, WithRetry non-retry behavior, and devCase irrelevance, matching the ground truth comments exactly.",
+    "error": null
+  },
+  {
+    "name": "TestOrchestrator_DevCases_Merged",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Where is `TestOrchestrator_DevCases_Merged` defined and what is its purpose?",
+    "baseline": "`TestOrchestrator_DevCases_Merged` not found anywhere in this repo. Not defined here.",
+    "rag": "Defined at `orchestrator_test.go:234`.\n\nPurpose: verifies that when `devCases` is passed to `orch.Run`, the orchestrator merges them with AI-generated cases before passing to `testGen.Generate`. Uses `capturingTestGen` wrapper to intercept the merged slice, then asserts length=2 with both `\"ai_test\"` and `\"dev_test\"` present in order.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline falsely claims the function doesn't exist; RAG correctly identifies location, merge behavior, capturingTestGen interception, and both assertions.",
+    "error": null
+  },
+  {
+    "name": "TestSave_GitignorePreservesExistingContent",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/save_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "How does `TestSave_GitignorePreservesExistingContent` work? Walk me through its logic.",
+    "baseline": "`TestSave_GitignorePreservesExistingContent` not found in this codebase. May belong to different repo or doesn't exist yet.\n\nWant me to search for related gitignore tests that do exist?",
+    "rag": "`TestSave_GitignorePreservesExistingContent` (line 110):\n\n1. **Setup** \u2014 creates temp dir, writes `.gitignore` with pre-existing content `\"*.log\\nbuild/\\n\"`\n2. **Act** \u2014 calls `Save(root, testSpecFile())`\n3. **Assert** \u2014 reads `.gitignore` back, checks all three entries exist: `*.log`, `build/`, `.flow-eng/`\n\n**What it proves**: `Save` appends `.flow-eng/` to `.gitignore` without clobbering existing lines. Complements `TestSave_GitignoreEntryNotDuplicated` (line 95) \u2014 that test guards against double-appending; this one guards against overwriting.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/ast_parser.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/save_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/save_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/save_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "RAG correctly describes all three test phases and the invariant being proved; baseline falsely claims the function doesn't exist; RAG's mention of line 95 and TestSave_GitignoreEntryNotDuplicated is unverifiable but plausible.",
+    "error": null
+  },
+  {
+    "name": "TestParseTestCaseResponse_EmptyArray",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "What does `TestParseTestCaseResponse_EmptyArray` do and when is it called?",
+    "baseline": "`TestParseTestCaseResponse_EmptyArray` doesn't exist in this codebase. Not defined, not called anywhere.",
+    "rag": "Passes `[]` (valid JSON, zero items) to `parseTestCaseResponse` and asserts it returns a `*types.UserError` with message containing `\"zero test cases\"`.\n\nIt's called by `go test` \u2014 not invoked manually. Guards against LLM returning an empty array instead of actual test cases.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen_test.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 3
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline falsely claims the function doesn't exist; RAG accurately describes the empty-array input, UserError assertion, message content, and test runner invocation.",
+    "error": null
+  }
+]

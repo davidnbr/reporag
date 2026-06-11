@@ -1,0 +1,177 @@
+[
+  {
+    "name": "Run",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/node.go",
+    "language": "go",
+    "chunk_type": "method",
+    "query": "I need to implement: Method Run of class unknown class. Parameters: e *NodeExecutor.. Write the code.",
+    "baseline": "Project is Python-based. `e *NodeExecutor` is Go syntax \u2014 no Go files exist here. This codebase has no `NodeExecutor`.\n\n**Cannot implement** \u2014 the type doesn't exist in this repo and the containing class is \"unknown.\" This looks like a request generated for a different codebase (Go).\n\nTo proceed I need:\n1. What class/struct owns this `Run` method?\n2. What language? (Go syntax but Python project)\n3. What should `Run` do?",
+    "rag": "`NodeExecutor.Run` already fully implemented at `node.go:25\u201365`. Nothing to write \u2014 it's identical in structure to `PythonExecutor.Run`, both delegate to `e.runner.run` per test case, collect stdout/stderr, return early on error, aggregate results.",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/node.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runner.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/python.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runtime_check.go",
+      "/home/davidnbr98/Projects/k8s_journey/out/_next/static/chunks/main-31f7d0de1179ab3e.js",
+      "/home/davidnbr98/Projects/k8s_journey/out/_next/static/chunks/main-31f7d0de1179ab3e.js",
+      "/home/davidnbr98/Projects/k8s_journey/out/_next/static/chunks/main-31f7d0de1179ab3e.js"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 3
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 4,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline refuses and falsely claims no Go code exists; RAG correctly identifies the existing implementation, its location, and key behavior (per-test delegation, early error return, stdout/stderr aggregation).",
+    "error": null
+  },
+  {
+    "name": "applyCLIOverrides",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/config/merge.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Write a function that: Parameters: cfg Config, o CLIOverrides. Returns: Config.",
+    "baseline": "Add to `config.py`:\n\n```python\nfrom dataclasses import dataclass\n\n\n@dataclass\nclass CLIOverrides:\n    embed_model: str | None = None\n    embed_backend: str | None = None\n    ollama_url: str | None = None\n    data_dir: str | None = None\n    reranker_model: str | None = None\n    reranker_k: int | None = None\n    rerank_by_default: bool | None = None\n    chunk_strategy: str | None = None\n    chunk_window_lines: int | None = None\n    chunk_overlap_lines: int | None = None\n    index_batch_size: int | None = None\n    subgraph_hops: int | None = None\n    snippet_chars: int | None = None\n\n\ndef apply_overrides(cfg: Config, o: CLIOverrides) -> Config:\n    updates = {k: v for k, v in vars(o).items() if v is not None}\n    return cfg.model_copy(update=updates)\n```\n\nKey points:\n- `CLIOverrides` mirrors only the fields that make sense as CLI flags (not internal tuning knobs like `bm25_k1`, `rrf_k`, etc.)\n- `model_copy(update=...)` returns a new `Config` \u2014 original untouched, Pydantic validates the merged result\n- `vars(o)` on a dataclass gives the dict; filter `None` so unset flags don't clobber config/env values\n\nShould I write this into `config.py` directly?",
+    "rag": "Already exists at `internal/config/merge.go:80`:\n\n```go\nfunc applyCLIOverrides(cfg Config, o CLIOverrides) Config {\n\tif o.Runtime != \"\" {\n\t\tcfg.Runtime = o.Runtime\n\t}\n\tif o.Iterations != nil {\n\t\tcfg.Iterations = *o.Iterations\n\t}\n\tif o.Model != \"\" {\n\t\tcfg.Model = o.Model\n\t}\n\tif o.TestModel != \"\" {\n\t\tcfg.TestModel = o.TestModel\n\t}\n\tif o.Assistant != \"\" {\n\t\tcfg.Assistant = o.Assistant\n\t}\n\tif o.Telemetry != \"\" {\n\t\tcfg.Telemetry = o.Telemetry\n\t}\n\tif o.TimeoutSimple != \"\" {\n\t\tcfg.Timeout.Simple = o.TimeoutSimple\n\t}\n\tif o.TimeoutComplex != \"\" {\n\t\tcfg.Timeout.Complex = o.TimeoutComplex\n\t}\n\treturn cfg\n}\n```",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/merge.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/config_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/config/effective.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/testgen.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/assistant/stdin_stdout.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/assistant/stdin_stdout.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/spec/engine.go"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 2,
+        "hallucination": 1
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline invented a Python implementation with wrong language, wrong fields, and wrong approach; RAG returned the exact Go function verbatim with correct file location.",
+    "error": null
+  },
+  {
+    "name": "Send",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+    "language": "go",
+    "chunk_type": "method",
+    "query": "I need to implement: Method Send of class unknown class. Parameters: m *sequentialMockConnector.. Write the code.",
+    "baseline": "No Go files in this Python project. `sequentialMockConnector` doesn't exist here \u2014 this looks like code from a different codebase.\n\nWhat project/file is this from? Paste the struct definition or the interface `Send` must satisfy and I'll write it.",
+    "rag": "Already shown in context:\n\n```go\nfunc (m *sequentialMockConnector) Send(_ context.Context, _ string) (assistant.Response, error) {\n\ti := m.idx\n\tif i >= len(m.resps) {\n\t\ti = len(m.resps) - 1\n\t}\n\tm.idx++\n\treturn m.resps[i], m.errs[i]\n}\n```",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/orchestrator_test.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/assistant/stdin_stdout.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/executor/runtime_check.go",
+      "/home/davidnbr98/Projects/django/tests/middleware/tests.py",
+      "/home/davidnbr98/Projects/django/django/dispatch/dispatcher.py",
+      "/home/davidnbr98/Projects/k8s_journey/out/_next/static/chunks/main-31f7d0de1179ab3e.js"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Baseline correctly refused but provided zero implementation; RAG returned exact ground truth verbatim.",
+    "error": null
+  },
+  {
+    "name": "formatFailures",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "Write a function that: Parameters: result types.ExecutionResult.",
+    "baseline": "This looks like a generated benchmark query from `llm_eval.py`'s discovery template (`\"Write a function that: {description}\"`), where the extracted description was just `\"Parameters: result types.ExecutionResult.\"` \u2014 too minimal to write a useful function.\n\n`ExecutionResult` doesn't exist in `mcp.types` or this project's source. To write the function I need:\n\n1. Which `types` module \u2014 `mcp.types`? A local module? An external package?\n2. What `ExecutionResult` contains (fields/shape)\n3. What the function should actually **do** with the result\n\nCan you clarify, or paste the `ExecutionResult` definition?",
+    "rag": "Request incomplete. What should function do? Need behavior/output/purpose.",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/loop.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/loop.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/stages.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/types/result.go",
+      "/home/davidnbr98/Projects/django/tests/utils_tests/test_functional.py",
+      "/home/davidnbr98/Projects/django/tests/utils_tests/test_functional.py",
+      "/home/davidnbr98/Projects/django/django/utils/functional.py",
+      "/home/davidnbr98/Projects/django/django/tasks/backends/immediate.py",
+      "/home/davidnbr98/Projects/django/django/db/models/expressions.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 2
+      },
+      "rag": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both refused to implement; baseline hallucinated mcp.types/wrong project context, RAG stayed neutral with no invented details.",
+    "error": null
+  },
+  {
+    "name": "appendCapped",
+    "file": "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/loop.go",
+    "language": "go",
+    "chunk_type": "function",
+    "query": "I need to implement: Parameters: msgs []string, msg string, cap int.. Write the code.",
+    "baseline": "Need more context. What should function do with those params? Options:\n\n1. **Append with cap** \u2014 add `msg` to `msgs`, drop oldest when `len > cap`\n2. **Bounded buffer** \u2014 return new slice capped at `cap`\n3. **Something else**\n\nAlso: language? (`[]string` looks Go)",
+    "rag": "Already exists at `loop.go:74`:\n\n```go\nfunc appendCapped(msgs []string, msg string, cap int) []string {\n\tmsgs = append(msgs, msg)\n\tif len(msgs) > cap {\n\t\tmsgs = msgs[len(msgs)-cap:]\n\t}\n\treturn msgs\n}\n```",
+    "context_files": [
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/loop.go",
+      "/home/davidnbr98/Projects/flow_eng_ai/internal/pipeline/prompt.go",
+      "/home/davidnbr98/Projects/django/docs/_ext/djangodocs.py",
+      "/home/davidnbr98/Projects/django/django/utils/text.py",
+      "/home/davidnbr98/Projects/django/django/utils/decorators.py",
+      "/home/davidnbr98/Projects/django/django/test/html.py",
+      "/home/davidnbr98/Projects/django/django/test/testcases.py",
+      "/home/davidnbr98/Projects/django/django/core/management/commands/makemessages.py",
+      "/home/davidnbr98/Projects/django/django/core/management/commands/makemessages.py",
+      "/home/davidnbr98/Projects/django/django/core/management/base.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "RAG returned exact implementation with file location; baseline refused to answer without guessing the semantics it already had available.",
+    "error": null
+  }
+]

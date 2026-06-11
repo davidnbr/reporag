@@ -1,0 +1,909 @@
+[
+  {
+    "name": "get_by_id",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/memory/store.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "How does `get_by_id` work? Walk me through its logic.",
+    "baseline": "`store.py:112` \u2014 logic is 3 lines:\n\n1. Open cursor on the SQLite connection\n2. `SELECT * FROM memories WHERE id = ?` \u2014 parameterized, single row fetch\n3. Return `_row_to_dict(row)` if found, else `None`\n\nNo joins, no caching, no side effects. Pure point-lookup by primary key.",
+    "rag": "Two separate `get_by_id`-style functions exist, depending on context:\n\n---\n\n### `MemoryStore.get_by_id` \u2014 `reporag/memory/store.py:112`\n\nSQLite-backed. Single parameterized query:\n\n```python\nSELECT * FROM memories WHERE id = ?\n```\n\nReturns `_row_to_dict(row)` if found, `None` otherwise. Straightforward point lookup.\n\n---\n\n### `DenseIndex.get_chunks` \u2014 `reporag/retrieval/dense.py:109`\n\nLanceDB-backed. Batch version of the same idea:\n\n1. Guards on empty `ids` list \u2192 returns `[]`\n2. Builds an inline `IN (...)` filter string from the id list\n3. Fires `table.search().where(f\"id IN ({id_list})\").to_list()`\n4. Returns full chunk dicts (embedding + metadata)\n\n**Note**: the `IN` filter is string-interpolated, not parameterized \u2014 minor SQL-injection risk if IDs ever come from untrusted input, though in practice they're internal UUIDs.\n\n---\n\nNo function literally named `get_by_id` exists in the retrieval layer \u2014 `get_chunks` is its equivalent there.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/symbol.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Both responses accurately describe get_by_id; RAG adds a tangential get_chunks function not asked about, introducing noise and a minor hallucination risk even if that code exists.",
+    "error": null
+  },
+  {
+    "name": "_priority_sort",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "What does `_priority_sort` do and when is it called?",
+    "baseline": "**`_priority_sort`** \u2014 sorts file list before indexing. Two-level key:\n\n1. Entry points first (`score=0` if `f.name in _ENTRY_POINTS`, else `1`)\n2. Most-recently-modified first (negated `st_mtime`)\n\n**Called once** at `index.py:163`, just before spawning `_run_index_bg` \u2014 so the indexer processes high-value files (e.g. `main.py`, `__init__.py`, etc.) and recently touched files first.",
+    "rag": "Sorts file list for indexing: entry points (e.g. `main.py`, `__init__.py`, `index.js`) go first (`score=0`), then all others sorted by `st_mtime` descending (newest first).\n\nCalled once in `_run_index_bg` at `index.py:163`, right before chunking/embedding begins \u2014 ensures architecturally important files and recently-changed files get indexed first if the job is interrupted.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 4,
+        "completeness": 4,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both correctly describe the two-level sort key; RAG adds accurate examples of entry point filenames and correctly situates the call within `_run_index_bg` with the interruption rationale, while baseline's call-site description is slightly less precise.",
+    "error": null
+  },
+  {
+    "name": "run",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/tools/status.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `run` in this codebase.",
+    "baseline": "Each MCP tool module exposes an `async def run(arguments, runtime)` \u2014 same signature, different purpose:\n\n---\n\n## `tools/index.py` \u2014 `run`\nEntry point for `index_codebase`. Does synchronous setup, fires async work:\n1. Resolves & validates path\n2. `rglob`s all files, filters by `_EXCLUDE_DEFAULTS` + language\n3. `_priority_sort` \u2014 entry points first, then newest-modified\n4. Creates an `IndexTask`, stores in `runtime.index_tasks`\n5. Registers project with file watcher\n6. `asyncio.create_task(_run_index_bg(...))` \u2014 returns immediately\n7. Returns `{status: \"indexing_started\", task_id, ...}`\n\nThe actual work is in `_run_index_bg`: acquires `runtime.index_sem`, calls `chunker.index_files_batched_async`, then `build_graph_for_project` in a thread executor, then reloads graph + invalidates reranker cache.\n\n---\n\n## `tools/query.py` \u2014 `run`\nFull 8-step retrieval pipeline for `query_code`:\n1. Dense search \u2192 LanceDB cosine (top N)\n2. Sparse search \u2192 BM25 (top N)\n3. RRF fusion (weighted dense=1.0, sparse=0.5)\n4. Reverse Personalized PageRank on RRF seed IDs (gated: needs `min_graph_edges_for_ppr`; weight 0.4 vs 0.2 depending on SCIP edge count)\n5. Merge RRF + PPR scores\n6. Fetch full chunk records, apply lang/project filters\n7. Cross-encoder rerank (if `len(candidates) <= reranker_k`)\n8. k-hop subgraph expansion via `_expand_subgraph`\n\n---\n\n## `tools/ask.py` \u2014 `run`\nRouter for `ask_project`. Keyword-matches the query against `_ROUTES` (summarize / architecture / status), delegates to the matching tool's `run`. Falls back to `query_tool.run` (semantic search) if no pattern matches. Stamps `source_tool` on the result.\n\n---\n\n## `tools/index_status.py` \u2014 `run`\nSimple lookup. With `task_id`: returns single task dict. Without: returns all tasks sorted newest-first. `_task_dict` computes ETA from current rate when status is `\"running\"`.\n\n---\n\n## `tools/status.py` \u2014 `run`\n`project_status` \u2014 scans indexed chunks for:\n- TODOs/FIXMEs via regex\n- Stubs: functions \u22645 lines whose body is only `pass`/`raise NotImplementedError`\n- Test file ratio\n- `git log --since=30.days` for activity\n\nDerives `health`: `\"good\"` / `\"needs-attention\"` / `\"stale\"`.\n\n---\n\n## `tools/symbol.py` \u2014 `run`\n`get_symbol` \u2014 two modes:\n- `fuzzy=True`: encode name \u2192 LanceDB vector search \u2192 top 5 chunks\n- `fuzzy=False` (default): exact SQLite lookup via `runtime.graph_db.get_symbol` (<50ms)\n\n---\n\n## `tools/summarize.py` \u2014 `run`\n`summarize_project` \u2014 builds structured overview: README description, language counts, entry points, top-N graph nodes by in-degree (with role), public API symbols (non-`_` functions/classes).\n\n---\n\n## `tools/architecture.py` \u2014 `run`\n`get_architecture` \u2014 extracts project subgraph, classifies each node as `hub`/`utility`/`bridge`/`leaf` by degree, groups into layers by top-level path segment, returns nodes + edges + role summary.\n\n---\n\n**Pattern across all:** `run(arguments: dict, runtime: Any) -> dict` \u2014 uniform MCP tool contract. `runtime` carries all shared state (embedder, dense store, BM25, graph, reranker, config, index tasks).",
+    "rag": "Four distinct `run` functions exist across tools. Each follows same pattern: validate args \u2192 query runtime state \u2192 return dict.\n\n---\n\n**`tools/index.py:run`** (lines 129\u2013194)\nEntry point for `index_codebase` tool. Resolves path, walks directory tree filtering against `_EXCLUDE_DEFAULTS`, optionally filters by language, then spawns `_run_index_bg` as a background task. Returns a `task_id` immediately \u2014 indexing is async, progress tracked via `runtime.index_tasks[task_id]`.\n\n**`tools/status.py:run`** (lines 44\u2013126)\nReports index status for a project. Opens LanceDB table, queries all chunks where `file_path LIKE '<project>%'`, scans raw content for TODO patterns. Returns file counts, chunk counts, TODO list, and graph stats.\n\n**`tools/architecture.py:run`** (lines 19\u201393)\nExtracts a project's subgraph from `runtime.graph` (networkx DiGraph). Filters nodes by path prefix, computes edges, groups nodes into layers (directory hierarchy). Returns nodes/edges/layers as JSON.\n\n**`tools/query.py:run`** (lines 23\u2013119)\nHybrid semantic search. Combines dense vector search (`runtime.dense`) + BM25 (`runtime.bm25`), optionally reranks results, filters by language or project prefix. Returns top-`k` chunks with scores.\n\n---\n\n**Common invariants across all four:**\n- First arg always validated \u2014 returns `{\"error\": \"...\"}` on bad input\n- All operate against `runtime` (shared lazy-init state in `server.py:Runtime`)\n- All are `async` but only `index.py:run` actually spawns background work",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/architecture.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 4,
+        "completeness": 4,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 3,
+        "completeness": 2,
+        "hallucination": 3
+      }
+    },
+    "reasoning": "Baseline correctly describes status.py run's TODO regex scan, stub detection (\u22645 lines, pass/raise NotImplementedError), and test coverage; RAG gets the LanceDB LIKE query right but omits stubs entirely and invents 'graph stats' not shown in the source.",
+    "error": null
+  },
+  {
+    "name": "MemoryStore",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/memory/store.py",
+    "language": "python",
+    "chunk_type": "class",
+    "query": "Where is `MemoryStore` defined and what is its purpose?",
+    "baseline": "**`reporag/memory/store.py:48`**\n\nSQLite-backed persistent memory store for project knowledge (decisions, discoveries, etc.).\n\n**Storage**: `memories` table + `memories_fts` FTS5 virtual table (keyword search). Auto-synced via INSERT/UPDATE/DELETE triggers.\n\n**API**:\n| Method | Purpose |\n|---|---|\n| `remember(content, tags, category, embedding)` | Insert entry, returns SHA-256-derived 16-char ID |\n| `recall(query, tags, category, limit)` | FTS5 MATCH search, BM25-ranked results |\n| `get_by_id(mem_id)` | Fetch single entry |\n| `delete(mem_id)` | Remove entry |\n\n**Usage in server**: instantiated at `server.py:162` as `self.memory = MemoryStore(data / \"memory.db\")`, lazy-imported only when memory tools are enabled.",
+    "rag": "**`reporag/memory/store.py:48`** \u2014 `MemoryStore`\n\nSQLite-backed persistent knowledge store for cross-session project memory. Two main operations:\n\n- **`remember(content, tags, category, embedding)`** \u2014 inserts a record, returns 16-char SHA256 ID\n- **`recall(query, tags, category, limit)`** \u2014 FTS5 keyword search via `memories_fts` virtual table, optional tag/category filter, ranked by BM25 score\n\nSchema: `memories` table + `memories_fts` FTS5 virtual table kept in sync via 3 triggers (insert/delete/update). No external deps \u2014 stdlib `sqlite3` only. Optional `embedding` blob column exists for future cosine similarity but unused in current retrieval path.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 4,
+        "completeness": 4,
+        "hallucination": 3
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both correctly describe location, purpose, and core API; baseline invents unverified methods (get_by_id, delete) and server instantiation details not in ground truth, while RAG stays faithful to shown code and correctly notes the embedding column is unused in retrieval.",
+    "error": null
+  },
+  {
+    "name": "score",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "How does `score` work? Walk me through its logic.",
+    "baseline": "`score` is a sort key at `index.py:68`. Returns a 2-tuple:\n\n```python\n(0 if f.name in _ENTRY_POINTS else 1, -f.stat().st_mtime)\n```\n\n**Element 1** \u2014 priority tier:\n- `0` if filename is in `_ENTRY_POINTS` (e.g. `main.py`, `main.c`, `index.js`, etc.)\n- `1` otherwise\n\n**Element 2** \u2014 recency:\n- negated `mtime` so newer files sort lower (earlier)\n\nPython tuple comparison is lexicographic, so entry points always come first, then within each tier files sort newest-first.\n\nUsed by `_priority_sort` to feed the indexer files in the order most likely to matter.",
+    "rag": "```python\ndef score(f: Path) -> tuple:\n    return (0 if f.name in _ENTRY_POINTS else 1, -f.stat().st_mtime)\n```\n\nReturns 2-element tuple used for sort ordering:\n\n1. **First element** \u2014 priority tier: `0` if filename is an entry point (e.g. `main.py`, `__init__.py`), else `1`. Entry points sort before ordinary files.\n\n2. **Second element** \u2014 negated mtime: more recently modified files get a smaller (more negative) value, so they sort earlier within the same tier.\n\nNet effect: entry points first, then most-recently-modified files. Likely passed to `sorted(files, key=score)`.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 4,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both correctly describe the two-tuple logic; baseline adds plausible but unverified claims (_priority_sort, specific entry point examples) while RAG stays closer to what the code shows.",
+    "error": null
+  },
+  {
+    "name": "_extract_params_python",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/semantic_text.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "What does `_extract_params_python` do and when is it called?",
+    "baseline": "Parses param names from Python function source using regex. Strips type annotations for readability.\n\n**What it does** (`semantic_text.py:24`):\n1. Regex `def\\s+\\w+\\s*\\(([^)]*)\\)` \u2014 captures everything inside the `()`\n2. Strips type annotations via `:\\s*[^,=)]+`\n3. Returns cleaned param string via `_clean()` (collapses whitespace)\n\n**Called from** `semantic_text.py:78-81` and `94-97` \u2014 when building semantic text for `function` and `method` chunk types, gated on `chunk.language == \"python\"`. Non-Python chunks use `_extract_params_generic` instead.",
+    "rag": "**`_extract_params_python`** \u2014 extracts parameter names from a Python function's source via regex.\n\n**What it does** (`semantic_text.py:24`):\n1. Regex-matches the `def name(...)` signature in raw source\n2. Strips type annotations (`: SomeType`) from each param\n3. Returns cleaned param name string (e.g. `\"self, path, timeout\"`)\n\n**When called** (`semantic_text.py:79,94`):\nInside `chunk_to_semantic_text` for `function` and `method` chunks **only when `chunk.language == \"python\"`**. Non-Python chunks fall through to `_extract_params_generic` instead.\n\n**Purpose**: part of manifold alignment \u2014 converts raw code into NL-like text for embedding so queries like \"function that takes path and timeout\" match better in vector search.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/status.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 4,
+        "completeness": 4,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 4,
+        "completeness": 5,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Both correctly describe the regex logic and annotation stripping; RAG adds plausible embedding-purpose context ('manifold alignment') that improves completeness but cannot be verified from the ground truth snippet, and both cite call-site line numbers that are unverifiable from the provided source.",
+    "error": null
+  },
+  {
+    "name": "_expand_subgraph",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `_expand_subgraph` in this codebase.",
+    "baseline": "`_expand_subgraph` at `reporag/tools/query.py:122`\n\n**Purpose:** For each result chunk, find all file-level neighbors within `hops` steps in the dependency graph, then attach them as metadata.\n\n**Logic:**\n\n1. **Guard** (`line 128`): returns chunks unchanged if no graph exists or `hops == 0`.\n\n2. **BFS per chunk** (`lines 131\u2013143`): For each chunk's `file_path`:\n   - `frontier` starts as `{file_path}`\n   - Each hop expands frontier by collecting both `successors` and `predecessors` of every node \u2014 bidirectional traversal\n   - Already-visited nodes (`neighbors`) and the origin file are excluded from the next frontier\n   - All visited nodes accumulate in `neighbors`\n\n3. **Output** (`line 143`): Attaches `neighbors` list (capped at 10) to each chunk dict.\n\n**Key details:**\n- Graph is a `networkx` digraph (`runtime.graph`) \u2014 edges likely represent import/call dependencies\n- Bidirectional traversal means \"files that import this\" + \"files this imports\" both count as neighbors\n- The `[:10]` cap is arbitrary truncation on a `set`, so neighbor order is non-deterministic across runs\n- Results flow into `_format_results` which passes `neighbors` through to the final response",
+    "rag": "`_expand_subgraph` (`query.py:122`) enriches each result chunk with graph neighbors.\n\n**Steps:**\n\n1. **Guard** (`128\u2013129`): returns unchanged if no graph or `hops == 0`.\n\n2. **BFS traversal** (`131\u2013142`): for each chunk, does `hops`-wide BFS over `runtime.graph` (a `nx.DiGraph`):\n   - `frontier` starts as `{file_path}` of the chunk\n   - Each hop expands frontier via both `successors` (files this file imports) and `predecessors` (files that import this file) \u2014 bidirectional\n   - Already-visited nodes and the seed node are excluded each iteration via `- neighbors - {file_path}`\n   - All visited nodes accumulate in `neighbors`\n\n3. **Attach** (`143`): stores up to 10 neighbor file paths in `chunk[\"neighbors\"]`.\n\n**Effect**: after reranking, each top-k result gets metadata about structurally related files within `cfg.subgraph_hops` edges in the import graph. Callers can use this for context widening \u2014 e.g., surfacing files that are closely coupled to a match even if they scored low in retrieval.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/architecture.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/status.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 5,
+        "completeness": 4,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Both responses accurately describe the BFS logic, bidirectional traversal, exclusion set math, and 10-item cap; RAG edges ahead on completeness by contextualizing the hops param as cfg.subgraph_hops and noting the reranking pipeline, while both lose one hallucination point for unverifiable details (baseline: _format_results downstream; RAG: cfg.subgraph_hops and reranking framing).",
+    "error": null
+  },
+  {
+    "name": "_git_activity",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/tools/status.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Where is `_git_activity` defined and what is its purpose?",
+    "baseline": "`reporag/tools/status.py:14` \u2014 `_git_activity(project: str) -> dict[str, Any]`\n\nTwo git subprocesses against the given project path:\n1. `git log --since=30.days --name-only --no-merges` \u2192 counts unique files changed in last 30 days (`files_changed_30d`)\n2. `git log -1 --format=%cr` \u2192 human-relative timestamp of last commit (`last_commit`)\n\nReturns `{\"files_changed_30d\": int, \"last_commit\": str}`, or `{\"available\": False}` on any exception.\n\nCalled at line 103 inside `run()` to populate the git section of the status response.",
+    "rag": "Defined at `reporag/tools/status.py:14`.\n\nRuns two `git log` subprocesses against a project path:\n1. Files changed in last 30 days (unique filenames, no merges)\n2. Last commit timestamp (human-readable relative format via `%cr`)\n\nReturns `{\"files_changed_30d\": int, \"last_commit\": str}`, or `{\"available\": False}` on any exception. Called at line 103 inside `status.run` to populate the `git` key of the status response.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both responses accurately describe the two subprocess calls, return values, error fallback, and call site \u2014 no invented details in either.",
+    "error": null
+  },
+  {
+    "name": "_record_file",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/chunker.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "How does `_record_file` work? Walk me through its logic.",
+    "baseline": "`_record_file` persists file indexing metadata to SQLite. Logic:\n\n1. **Upsert** (`INSERT OR REPLACE`) into `file_index` table with 5 fields:\n   - `file_path` \u2014 string path of the file\n   - `mtime` \u2014 current modification time from `path.stat().st_mtime`\n   - `file_hash` \u2014 content hash via `_file_hash(path)`\n   - `chunk_count` \u2014 passed in by caller (how many chunks were produced)\n   - `indexed_at` \u2014 wall-clock timestamp via `time.time()`\n\n2. **Commits** immediately after insert.\n\n**Purpose**: creates a fingerprint record so `_is_unchanged` (line 76-79) can skip re-indexing on future runs \u2014 it compares mtime and hash against this stored row. `_record_file` is called after a file is successfully chunked/embedded, closing the incremental indexing loop.",
+    "rag": "`_record_file` at `reporag/indexer/chunker.py:81` \u2014 single SQL upsert, then commit:\n\n```python\ndef _record_file(self, path: Path, chunk_count: int) -> None:\n    self._meta_conn.execute(\n        \"INSERT OR REPLACE INTO file_index (file_path, mtime, file_hash, chunk_count, indexed_at) \"\n        \"VALUES (?, ?, ?, ?, ?)\",\n        (str(path), path.stat().st_mtime, self._file_hash(path), chunk_count, time.time()),\n    )\n    self._meta_conn.commit()\n```\n\n**Logic:**\n\n1. **`INSERT OR REPLACE`** \u2014 upserts row keyed on `file_path`. First index or re-index both handled.\n2. **`mtime`** \u2014 `path.stat().st_mtime`, float timestamp. Used later by `_is_unchanged` (line 76) to fast-path skip.\n3. **`file_hash`** \u2014 content hash via `_file_hash(path)`. Second check in `_is_unchanged` \u2014 mtime can lie (same timestamp, different content), hash catches it.\n4. **`chunk_count`** \u2014 how many AST chunks were produced from this file. Informational/stats.\n5. **`indexed_at`** \u2014 wall clock via `time.time()`. Audit trail.\n6. **`commit()`** \u2014 immediately flushes to SQLite. Called after each file so a crash mid-batch doesn't lose all progress.\n\n**Called from** `index_files` after a file's chunks are embedded and stored \u2014 seals the record so `_is_unchanged` will skip it next incremental run.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 5,
+        "completeness": 4,
+        "hallucination": 4
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both correctly describe the upsert+commit logic; RAG adds exact file location, reproduces the actual code, and explains the dual-check rationale (mtime vs hash) that baseline omits \u2014 baseline's reference to line 76-79 for `_is_unchanged` is unverified but plausible, not clearly wrong.",
+    "error": null
+  },
+  {
+    "name": "CrossEncoderReranker",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/retrieval/reranker.py",
+    "language": "python",
+    "chunk_type": "class",
+    "query": "What does `CrossEncoderReranker` do and when is it called?",
+    "baseline": "**What it does:** Reranks candidate chunks by true query relevance using a local cross-encoder model (`cross-encoder/ms-marco-MiniLM-L-6-v2`). Unlike bi-encoders (dense retrieval), cross-encoders score each `(query, chunk)` pair jointly \u2014 slower but more accurate. Adds `rerank_score` to each chunk dict, returns sorted descending. Results cached by SHA256 of `query + chunk_ids`.\n\n**When called (3 sites):**\n\n| Site | Condition |\n|---|---|\n| `reporag/tools/query.py:102` | Step 7 of query pipeline, when `do_rerank=True` and `len(candidates) <= cfg.reranker_k` (default 15) |\n| `scripts/benchmark.py:142` | Same guard: `len(candidates) <= 50` |\n| `tests/test_retrieval_quality.py:113` | Same guard: `len(candidates) <= 50` |\n\n**Cache invalidated** at `tools/index.py:106` after re-index completes.\n\nKey design: lazy-loaded on first `rerank()` call to avoid startup delay; only fires on small candidate sets (precision over speed).",
+    "rag": "**What it does:** Reranks candidate chunks by scoring (query, chunk_text) pairs through a local cross-encoder model (`BAAI/bge-reranker-base` by default). Unlike bi-encoder embedding similarity, a cross-encoder sees both texts together \u2014 higher precision but slower. Adds `rerank_score` to each chunk, returns sorted descending. Results are SHA-256-keyed in-memory cache; cache invalidated on re-index (`tools/index.py:106`).\n\n**When called:** Step 7 of `query.py`, gated by two conditions (`query.py:101`):\n\n```python\nif do_rerank and candidates and len(candidates) <= cfg.reranker_k:\n    candidates = runtime.reranker.rerank(query, candidates)\n```\n\n- `do_rerank`: from `rerank` argument, defaults to `cfg.rerank_by_default` \u2014 **off by default** (config note: MS-MARCO rerankers degrade code retrieval)\n- `len(candidates) <= cfg.reranker_k`: only fires when candidate pool is small enough (default `reranker_k=50`) \u2014 precision guard, not a speed shortcut\n\nModel lazy-loads on first `.rerank()` call to avoid startup penalty.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 4,
+        "completeness": 4,
+        "hallucination": 3
+      },
+      "rag": {
+        "correctness": 3,
+        "completeness": 4,
+        "hallucination": 2
+      }
+    },
+    "reasoning": "Baseline correctly identifies the default model (cross-encoder/ms-marco-MiniLM-L-6-v2) while RAG hallucinates it as BAAI/bge-reranker-base; both invent unverifiable call-site details, but RAG also fabricates a 'config note' about MS-MARCO degrading code retrieval.",
+    "error": null
+  },
+  {
+    "name": "is_ready",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/retrieval/sparse.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `is_ready` in this codebase.",
+    "baseline": "`reporag/retrieval/sparse.py:97` \u2014 it's a `@property`:\n\n```python\n@property\ndef is_ready(self) -> bool:\n    return self._retriever is not None and bool(self._doc_ids)\n```\n\nTwo conditions must both be true:\n1. `_retriever` \u2014 BM25 retriever object has been initialized (not `None`)\n2. `_doc_ids` \u2014 document ID list is non-empty\n\n**Usage pattern** throughout codebase: callers guard BM25 search behind `is_ready` to skip sparse retrieval if the index hasn't been built yet, falling back to dense-only results.",
+    "rag": "`is_ready` is a property on `BM25Index` (`reporag/retrieval/sparse.py:97`):\n\n```python\n@property\ndef is_ready(self) -> bool:\n    return self._retriever is not None and bool(self._doc_ids)\n```\n\nTwo conditions must both be true:\n\n1. `_retriever is not None` \u2014 a BM25 retriever object (loaded from `retriever.pkl`) has been set\n2. `bool(self._doc_ids)` \u2014 the doc ID list (loaded from `doc_ids.json`) is non-empty\n\nBoth fields are populated only after `load()` or a successful `build()`. Before that, both are `None`/empty, so `is_ready` returns `False`.\n\nCallers use it as a guard before sparse search \u2014 e.g. `query.py:54`:\n```python\nruntime.bm25.search(query, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []\n```\nFalling back to empty list when BM25 index absent, so dense-only retrieval still works.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 3,
+        "completeness": 3,
+        "hallucination": 3
+      },
+      "rag": {
+        "correctness": 3,
+        "completeness": 4,
+        "hallucination": 2
+      }
+    },
+    "reasoning": "Both hallucinate the @property decorator absent from ground truth; RAG adds unverifiable specifics (retriever.pkl, doc_ids.json, load()/build() lifecycle, query.py:54 caller) that inflate completeness but increase hallucination risk.",
+    "error": null
+  },
+  {
+    "name": "test_ask_result_includes_source_tool",
+    "file": "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Where is `test_ask_result_includes_source_tool` defined and what is its purpose?",
+    "baseline": "`tests/test_project_intelligence.py:336`\n\nVerifies `ask.run()` always returns a dict containing `\"source_tool\"` key. Guards against regressions where the `ask` tool omits provenance metadata from its result.",
+    "rag": "`tests/test_project_intelligence.py:336\u2013340`\n\nVerifies `ask.run` always sets `source_tool` in its result \u2014 regardless of query routing path. Guards against regressions where a code path returns a result dict without that key.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 4,
+        "completeness": 4,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "RAG adds accurate line range and the 'regardless of query routing path' nuance absent from baseline, which is otherwise equally accurate but slightly less complete.",
+    "error": null
+  },
+  {
+    "name": "run",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/tools/symbol.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "How does `run` work? Walk me through its logic.",
+    "baseline": "Multiple `run` functions exist. Which one \u2014 `index`, `query`, `status`, `ask`, or another?",
+    "rag": "Multiple `run` functions shown \u2014 `status.py`, `architecture.py`, `index.py`, `query.py`. Which one?",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/architecture.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 1,
+        "completeness": 1,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Both responses deflect instead of answering; RAG lists specific filenames not in the ground truth context (potential hallucination), while baseline gives a generic non-answer \u2014 neither describes symbol.py's run logic at all.",
+    "error": null
+  },
+  {
+    "name": "_file_hash",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/chunker.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "What does `_file_hash` do and when is it called?",
+    "baseline": "`_file_hash` (chunker.py:67) \u2014 SHA-256 of file bytes, truncated to 16 hex chars.\n\nCalled twice:\n1. `_is_unchanged` (line 79) \u2014 compares hash vs stored value after mtime check passes; guards against same-mtime content changes\n2. `_record_file` (line 85) \u2014 stores hash to DB when a file is indexed\n\nTogether: mtime is the fast pre-filter, hash is the authoritative equality check.",
+    "rag": "`_file_hash` computes a truncated SHA-256 of raw file bytes, returning first 16 hex chars.\n\nCalled in two places:\n\n- **`_is_unchanged`** (`chunker.py:79`) \u2014 compares stored hash against current file to confirm no content change (after a fast mtime pre-check eliminates most candidates)\n- **`_record_file`** (`chunker.py:85`) \u2014 stores the hash in `file_meta.db` alongside mtime when a file finishes indexing\n\nTogether they form a two-tier incremental indexing guard: mtime fast-path, hash as fallback when mtime matches but content may differ (e.g. same-second writes, copied timestamps).",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 5,
+        "completeness": 4,
+        "hallucination": 3
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 4,
+        "hallucination": 2
+      }
+    },
+    "reasoning": "Both correctly describe SHA-256 truncation to 16 hex chars, but both invent caller details (_is_unchanged, _record_file, line numbers) absent from ground truth; RAG adds an additional unverifiable 'file_meta.db' claim.",
+    "error": null
+  },
+  {
+    "name": "encode_corpus_async",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/embedder.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `encode_corpus_async` in this codebase.",
+    "baseline": "`encode_corpus_async` (`embedder.py:103`) is thin async wrapper over blocking `encode_corpus`.\n\n**What it does:**\n\n```\nencode_corpus_async(texts, batch_size=64)\n  \u2514\u2500 loop.run_in_executor(None, encode_corpus, texts, batch_size)\n       \u2514\u2500 encode_corpus(texts, batch_size=64)\n            \u251c\u2500 _apply_prefix(texts, \"index\")   # adds nomic prefix if model requires it\n            \u251c\u2500 [sentence-transformers backend]\n            \u2502    \u2514\u2500 SentenceTransformer.encode(..., normalize_embeddings=True) \u2192 float32 (N, dim)\n            \u2514\u2500 [ollama backend]\n                 \u2514\u2500 _encode_ollama_batch() \u2192 sequential HTTP POSTs to /api/embeddings \u2192 np.stack\n```\n\n**Key points:**\n\n- `run_in_executor(None, ...)` \u2014 uses default `ThreadPoolExecutor`. Embedding is CPU/IO-bound and fully blocking; this offloads it so the asyncio event loop stays unblocked.\n- No async batching or parallelism inside \u2014 `encode_corpus` runs synchronously in the thread.\n- Returns `np.ndarray` shape `(N, dim)` \u2014 `dim` is 768 for nomic models, 384 for MiniLM.\n- `batch_size=64` only matters for sentence-transformers backend; ollama iterates one text at a time regardless.",
+    "rag": "Thin async wrapper around the sync `encode_corpus` method.\n\n```python\nasync def encode_corpus_async(self, texts: list[str], batch_size: int = 64) -> np.ndarray:\n    loop = asyncio.get_event_loop()\n    return await loop.run_in_executor(None, self.encode_corpus, texts, batch_size)\n```\n\n**What it does:** Offloads blocking `encode_corpus` call to thread pool via `run_in_executor(None, ...)` \u2014 `None` uses the default `ThreadPoolExecutor`. Returns same `np.ndarray` as sync version.\n\n**Why:** Embedding is CPU/IO-bound and synchronous (sentence-transformers or Ollama HTTP calls). Running it directly in an async event loop would block. Thread pool lets the event loop stay responsive during indexing.\n\n**No retry, no batching logic here** \u2014 that lives in `encode_corpus` (lines ~60\u2013101).",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/status.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 2
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 4,
+        "hallucination": 5
+      }
+    },
+    "reasoning": "Both correctly describe the run_in_executor pattern, but baseline invents detailed internals of encode_corpus (two backends, _apply_prefix, dim values) not present in ground truth, while RAG stays scoped to the actual implementation.",
+    "error": null
+  },
+  {
+    "name": "_cache_key",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/retrieval/reranker.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Where is `_cache_key` defined and what is its purpose?",
+    "baseline": "`reporag/retrieval/reranker.py:30` \u2014 method on the reranker class.\n\nTakes `query` + `chunks` list, sorts chunk IDs, hashes `\"query||id1|id2...\"` with SHA-256, returns first 16 hex chars. Cache key for memoizing rerank results \u2014 avoids re-running the CrossEncoder for identical query+chunk combos.",
+    "rag": "Defined at `reporag/retrieval/reranker.py:30`.\n\nBuilds a 16-char SHA-256 hex digest from `query + sorted chunk IDs`. Used at line 56 as a cache lookup key \u2014 if the same query+chunk set was already reranked, return cached result and skip the expensive cross-encoder `predict` call.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/status.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 5,
+        "completeness": 4,
+        "hallucination": 5
+      },
+      "rag": {
+        "correctness": 5,
+        "completeness": 5,
+        "hallucination": 4
+      }
+    },
+    "reasoning": "Both accurately describe the implementation; RAG adds useful call-site context (line 56, cross-encoder predict) that is plausible but unverifiable from ground truth, slightly risking hallucination.",
+    "error": null
+  },
+  {
+    "name": "SCIPEdge",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/scip_indexer.py",
+    "language": "python",
+    "chunk_type": "class",
+    "query": "How does `SCIPEdge` work? Walk me through its logic.",
+    "baseline": "`SCIPEdge` is a `NamedTuple` \u2014 a plain data container, no logic of its own. The logic lives in `_parse_scip_output`.\n\n**The struct** (`scip_indexer.py:39`):\n```\nsrc_symbol, src_file, src_line  \u2192 where the reference occurs\ndst_symbol, dst_file, dst_line  \u2192 where the symbol is defined\nedge_type                        \u2192 always \"reference\" (no \"definition\" edges built yet)\n```\n\n**How edges get built** (`scip_indexer.py:102`):\n\n**Pass 1 \u2014 build definition map** (lines 145\u2013150):\nScan every occurrence across all documents. If `symbol_roles & 1` (DEFINITION bit set), record `symbol \u2192 (abs_path, line)` in `symbol_defs`.\n\n**Pass 2 \u2014 emit reference edges** (lines 153\u2013170):\nScan again. For each occurrence that is NOT a definition:\n1. Look up its symbol in `symbol_defs`\n2. Skip if not found (unresolved symbol)\n3. Skip if `dst_file == src_file` (same-file references ignored \u2014 cross-file only)\n4. Emit a `SCIPEdge` linking the reference site to the definition site\n\n**Entry point** (`run_scip`, line 62):\nRuns the language-specific SCIP CLI (`scip-python`, `scip-go`, etc.) with `{root}` and `{output}` substituted, writes a `.scip` protobuf to a temp file, calls `_parse_scip_output`, then deletes the temp file. Returns `[]` on any failure so callers fall back to heuristic indexing.\n\n**Key constraint**: only cross-file edges are emitted. Same-file references are silently dropped at line 159.",
+    "rag": "`SCIPEdge` is a `NamedTuple` representing a single cross-file symbol reference edge in a compiler-grade dependency graph.\n\n## Fields\n\n```python\nclass SCIPEdge(NamedTuple):\n    src_symbol: str   # \"rel/path.py::42\" (file+line)\n    src_file: str     # absolute path of referencing file\n    src_line: int     # 1-indexed line of the reference\n    dst_symbol: str   # SCIP canonical symbol string (e.g. \"scip-python ... ClassName#method()\")\n    dst_file: str     # absolute path where symbol is defined\n    dst_line: int     # 1-indexed line of definition\n    edge_type: str    # always \"reference\" currently\n```\n\n## How it's built (`_parse_scip_output`, line 102)\n\n**Pass 1 \u2014 build definition map** (lines 145\u2013150):\nIterates every `occurrence` in every document. If `symbol_roles & 1` (the DEFINITION bit), records `symbol \u2192 (abs_path, line)` in `symbol_defs`.\n\n**Pass 2 \u2014 emit reference edges** (lines 153\u2013170):\nSame iteration, but now picks occurrences where the DEFINITION bit is NOT set (i.e., references). For each reference:\n1. Looks up the symbol in `symbol_defs`.\n2. Skips if no definition found, or if `dst_file == src_file` (same-file references ignored \u2014 only cross-file edges matter for the graph).\n3. Appends a `SCIPEdge`.\n\n## Key design points\n\n- **Source of truth**: SCIP output comes from compiler/LSP-level tools (`scip-python`, `scip-typescript`, etc.), giving exact resolution vs. tree-sitter heuristics (~70% accurate).\n- **Cross-file only**: Same-file references filtered at line 159. This keeps the graph focused on inter-module dependencies.\n- **Graceful degradation**: `run_scip` (line 62) returns `[]` on any failure \u2014 CLI missing, timeout (300s), parse error. Caller falls back to heuristics.\n- **Protobuf fallback chain** (lines 109\u2013125): Tries `reporag.indexer.scip_pb2` \u2192 bare `scip_pb2` \u2192 `scip.scip_pb2`. Warns and returns `[]` if none available.",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/scripts/generate_scip_pb2.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py"
+    ],
+    "scores": {
+      "baseline": {
+        "correctness": 3,
+        "completeness": 3,
+        "hallucination": 2
+      },
+      "rag": {
+        "correctness": 4,
+        "completeness": 4,
+        "hallucination": 3
+      }
+    },
+    "reasoning": "Ground truth only shows the NamedTuple definition; both responses invent extensive _parse_scip_output implementation details unverifiable from context, but baseline additionally contradicts the edge_type comment ('reference | definition') by claiming only 'reference' is ever used, while RAG invents non-existent field-level inline comments like '\"rel/path.py::42\"'.",
+    "error": null
+  },
+  {
+    "name": "run",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/tools/ask.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "What does `run` do and when is it called?",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/architecture.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/memory.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "_resolve_js_module",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/heuristic_graph.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `_resolve_js_module` in this codebase.",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/architecture.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/heuristic_graph.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/heuristic_graph.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/heuristic_graph.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "test_ask_routes_to_status",
+    "file": "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Where is `test_ask_routes_to_status` defined and what is its purpose?",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "ChunkIndexer",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/chunker.py",
+    "language": "python",
+    "chunk_type": "class",
+    "query": "How does `ChunkIndexer` work? Walk me through its logic.",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/semantic_text.py",
+      "/home/davidnbr98/Projects/reporag/reporag/indexer/semantic_text.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/sparse.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/dense.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/dense.py",
+      "/home/davidnbr98/Projects/reporag/reporag/retrieval/reranker.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "test_merge_rrf_ppr_union",
+    "file": "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "What does `test_merge_rrf_ppr_union` do and when is it called?",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "test_parse_python_line_ranges",
+    "file": "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `test_parse_python_line_ranges` in this codebase.",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "test_semantic_text_function",
+    "file": "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Where is `test_semantic_text_function` defined and what is its purpose?",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "make_id",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/ast_parser.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "How does `make_id` work? Walk me through its logic.",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/scripts/benchmark.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_memory.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "test_full_not_worse_than_rrf",
+    "file": "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "What does `test_full_not_worse_than_rrf` do and when is it called?",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "__init__",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/heuristic_graph.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Explain the implementation of `__init__` in this codebase.",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/status.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "test_architecture_layers_contain_reporag",
+    "file": "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "Where is `test_architecture_layers_contain_reporag` defined and what is its purpose?",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/reporag/tools/architecture.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_pagerank.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "_apply_prefix",
+    "file": "/home/davidnbr98/Projects/reporag/reporag/indexer/embedder.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "How does `_apply_prefix` work? Walk me through its logic.",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_rrf.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_chunker.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_retrieval_quality.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/index_status.py",
+      "/home/davidnbr98/Projects/reporag/reporag/tools/query.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  },
+  {
+    "name": "test_status_missing_project_returns_error",
+    "file": "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+    "language": "python",
+    "chunk_type": "function",
+    "query": "What does `test_status_missing_project_returns_error` do and when is it called?",
+    "baseline": "",
+    "rag": "",
+    "context_files": [
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/tests/test_project_intelligence.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py",
+      "/home/davidnbr98/Projects/reporag/reporag/server.py"
+    ],
+    "scores": {},
+    "reasoning": "",
+    "error": "claude -p failed"
+  }
+]

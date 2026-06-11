@@ -293,10 +293,13 @@ class ChunkIndexer:
         """Rebuild BM25 index from all chunks currently in LanceDB."""
         logger.info("Rebuilding BM25 index...")
         self._dense._open_or_create_table()
-        all_records = self._dense._table.search().select(["id", "semantic_text"]).to_list()
+        all_records = (
+            self._dense._table.search().select(["id", "semantic_text", "file_path"]).to_list()
+        )
         ids = [r["id"] for r in all_records]
         texts = [r["semantic_text"] for r in all_records]
+        files = [r["file_path"] for r in all_records]
         if ids:
-            self._bm25.build(ids, texts)
+            self._bm25.build(ids, texts, files)
             bm25_path = self._data_dir / "bm25"
             self._bm25.save(bm25_path)

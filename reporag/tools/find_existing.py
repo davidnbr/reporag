@@ -45,8 +45,12 @@ async def run(
 
     # ── Hybrid retrieval (same pipeline as query_code, no reranker) ──────────
     q_vec = runtime.embedder.encode_query(task)
-    dense_ids = runtime.dense.search(q_vec, k=cfg.dense_candidates)
-    sparse_ids = runtime.bm25.search(task, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []
+    dense_ids = runtime.dense.search(q_vec, k=cfg.dense_candidates, project=project_filter)
+    sparse_ids = (
+        runtime.bm25.search(task, k=cfg.sparse_candidates, project=project_filter)
+        if runtime.bm25.is_ready
+        else []
+    )
 
     from reporag.retrieval.rrf import rrf_fuse
 
@@ -56,16 +60,14 @@ async def run(
         weights=[cfg.rrf_dense_weight, cfg.rrf_sparse_weight],
     )
 
-    candidate_ids = [doc_id for doc_id, _ in list(fused.items())[: k * 4]]
+    # k*6 (not k*4) — project prefilter already applied, so widen the pool to
+    # compensate for the chunk_type filter dropping module/window chunks.
+    candidate_ids = [doc_id for doc_id, _ in list(fused.items())[: k * 6]]
     candidates = runtime.dense.get_chunks(candidate_ids)
 
     # Restore merged score order
     id_rank = {doc_id: i for i, doc_id in enumerate(candidate_ids)}
     candidates.sort(key=lambda c: id_rank.get(c.get("id", ""), len(candidate_ids)))
-
-    # ── Apply filters ─────────────────────────────────────────────────────────
-    if project_filter:
-        candidates = [c for c in candidates if c.get("file_path", "").startswith(project_filter)]
 
     # Skip module-level chunks — functions and classes are actionable reuse targets
     candidates = [c for c in candidates if c.get("chunk_type") in {"function", "method", "class"}]

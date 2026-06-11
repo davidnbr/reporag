@@ -94,16 +94,34 @@ class DenseIndex:
         self._table.delete(f"file_path LIKE '{safe}%'")
         return before - self._table.count_rows()
 
-    def search(self, query_vec: np.ndarray, k: int = 50) -> list[str]:
-        """Return top-k chunk IDs by cosine similarity."""
+    def search(
+        self,
+        query_vec: np.ndarray,
+        k: int = 50,
+        project: str | None = None,
+        languages: list[str] | None = None,
+    ) -> list[str]:
+        """Return top-k chunk IDs by cosine similarity.
+
+        If `project` is given, prefilters to chunks whose file_path is under
+        that root (applied before vector search, so it never truncates results
+        from other projects out of the candidate pool). `languages` similarly
+        prefilters by language.
+        """
         self._open_or_create_table()
-        results = (
-            self._table.search(query_vec.tolist())
-            .metric("cosine")
-            .limit(k)
-            .select(["id", "_distance"])
-            .to_list()
-        )
+        q = self._table.search(query_vec.tolist()).metric("cosine")
+
+        clauses: list[str] = []
+        if project:
+            safe = project.rstrip("/").replace("'", "''")
+            clauses.append(f"file_path LIKE '{safe}/%'")
+        if languages:
+            langs = ", ".join("'" + lang.replace("'", "''") + "'" for lang in languages)
+            clauses.append(f"language IN ({langs})")
+        if clauses:
+            q = q.where(" AND ".join(clauses), prefilter=True)
+
+        results = q.limit(k).select(["id", "_distance"]).to_list()
         return [r["id"] for r in results]
 
     def get_chunks(self, ids: list[str]) -> list[dict[str, Any]]:

@@ -47,11 +47,15 @@ async def run(
 
     # ── 1. Dense retrieval ──────────────────────────────────────────────────
     q_vec = runtime.embedder.encode_query(query)
-    dense_ids = runtime.dense.search(q_vec, k=cfg.dense_candidates)
+    dense_ids = runtime.dense.search(
+        q_vec, k=cfg.dense_candidates, project=project_filter, languages=lang_filter
+    )
 
     # ── 2. Sparse retrieval (BM25) ──────────────────────────────────────────
     sparse_ids = (
-        runtime.bm25.search(query, k=cfg.sparse_candidates) if runtime.bm25.is_ready else []
+        runtime.bm25.search(query, k=cfg.sparse_candidates, project=project_filter)
+        if runtime.bm25.is_ready
+        else []
     )
 
     # ── 3. RRF fusion (weighted: dense=1.0, sparse=0.5) ─────────────────────
@@ -94,12 +98,6 @@ async def run(
     # Restore merged score order (get_chunks returns DB scan order, not ranked order)
     id_rank = {doc_id: i for i, doc_id in enumerate(candidate_ids)}
     candidates.sort(key=lambda c: id_rank.get(c.get("id", ""), len(candidate_ids)))
-
-    # Apply filters
-    if lang_filter:
-        candidates = [c for c in candidates if c.get("language") in lang_filter]
-    if project_filter:
-        candidates = [c for c in candidates if c.get("file_path", "").startswith(project_filter)]
 
     # ── 7. Cross-encoder rerank ─────────────────────────────────────────────
     if do_rerank and candidates and len(candidates) <= cfg.reranker_k:
