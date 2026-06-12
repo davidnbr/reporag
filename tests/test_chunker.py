@@ -161,6 +161,8 @@ def test_parse_elixir_extracts_module_and_functions(tmp_path: Path):
 
           defp helper(x), do: x * 2
 
+          def double(x) when is_integer(x), do: x * 2
+
           defmacro shortcut(name) do
             quote do
               IO.puts(unquote(name))
@@ -178,6 +180,8 @@ def test_parse_elixir_extracts_module_and_functions(tmp_path: Path):
     assert by_name["total"].chunk_type == "function"
     assert by_name["total"].parent_name == "Billing.Invoice"
     assert by_name["helper"].chunk_type == "function"
+    # `when` guard clauses must not swallow the def name into <anonymous>
+    assert by_name["double"].chunk_type == "function"
     assert by_name["shortcut"].chunk_type == "function"
     # `defstruct [...]` and `quote do ... end` are plain calls, not defs
     assert "defstruct" not in by_name

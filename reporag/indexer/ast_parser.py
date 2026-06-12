@@ -219,6 +219,8 @@ def _elixir_chunk_info(node: tree_sitter.Node, src: bytes) -> tuple[str, str] | 
                 return chunk_type, src[arg.start_byte : arg.end_byte].decode(
                     "utf-8", errors="replace"
                 )
+            if arg.type == "binary_operator" and arg.children:  # def foo(...) when guard
+                arg = arg.children[0]
             if arg.type in ("call", "identifier"):  # def foo(...), do: .. / def foo, do: ..
                 target = arg.children[0] if arg.type == "call" and arg.children else arg
                 if target.type == "identifier":
