@@ -145,6 +145,86 @@ def test_parse_ruby_extracts_classes_and_methods(tmp_path: Path):
     assert all(c.name != "<anonymous>" for c in chunks)
 
 
+def test_detect_language_elixir():
+    assert detect_language(Path("lib/billing/invoice.ex")) == "elixir"
+
+
+def test_parse_elixir_extracts_module_and_functions(tmp_path: Path):
+    pytest.importorskip("tree_sitter_elixir", reason="tree-sitter-elixir not installed")
+    code = textwrap.dedent("""\
+        defmodule Billing.Invoice do
+          @moduledoc "Invoice handling"
+
+          defstruct [:id, :total]
+
+          def total(%__MODULE__{total: t}), do: t
+
+          defp helper(x), do: x * 2
+
+          defmacro shortcut(name) do
+            quote do
+              IO.puts(unquote(name))
+            end
+          end
+        end
+    """)
+    ex_file = tmp_path / "invoice.ex"
+    ex_file.write_text(code)
+
+    chunks = parse_file(ex_file)
+    by_name = {c.name: c for c in chunks if c.chunk_type != "module"}
+
+    assert by_name["Billing.Invoice"].chunk_type == "class"
+    assert by_name["total"].chunk_type == "function"
+    assert by_name["total"].parent_name == "Billing.Invoice"
+    assert by_name["helper"].chunk_type == "function"
+    assert by_name["shortcut"].chunk_type == "function"
+    # `defstruct [...]` and `quote do ... end` are plain calls, not defs
+    assert "defstruct" not in by_name
+    assert "quote" not in by_name
+
+
+def test_detect_language_hcl():
+    assert detect_language(Path("main.tf")) == "hcl"
+
+
+def test_parse_hcl_extracts_blocks(tmp_path: Path):
+    pytest.importorskip("tree_sitter_hcl", reason="tree-sitter-hcl not installed")
+    code = textwrap.dedent("""\
+        variable "region" {
+          default = "us-east-1"
+        }
+
+        resource "aws_s3_bucket" "data" {
+          bucket = "my-bucket"
+
+          lifecycle {
+            prevent_destroy = true
+          }
+        }
+
+        module "vpc" {
+          source = "./modules/vpc"
+        }
+
+        output "bucket_arn" {
+          value = aws_s3_bucket.data.arn
+        }
+    """)
+    tf_file = tmp_path / "main.tf"
+    tf_file.write_text(code)
+
+    chunks = parse_file(tf_file)
+    by_name = {c.name: c for c in chunks if c.chunk_type != "module"}
+
+    assert by_name["region"].chunk_type == "function"
+    assert by_name["aws_s3_bucket.data"].chunk_type == "class"
+    assert by_name["vpc"].chunk_type == "class"
+    assert by_name["bucket_arn"].chunk_type == "function"
+    # nested `lifecycle {}` block must not produce its own chunk
+    assert "lifecycle" not in by_name
+
+
 def test_semantic_text_function():
     chunk = Chunk(
         id="x",

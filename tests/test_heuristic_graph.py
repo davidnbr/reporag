@@ -108,3 +108,54 @@ def test_ruby_require_resolves_from_lib(tmp_path: Path):
     edges = extract_imports(main, tmp_path)
     assert len(edges) == 1
     assert edges[0].dst_file == str((lib / "billing.rb").resolve())
+
+
+def test_elixir_alias_resolves_camel_to_snake_path(tmp_path: Path):
+    lib = tmp_path / "lib" / "billing"
+    lib.mkdir(parents=True)
+    (lib / "invoice.ex").write_text("defmodule Billing.Invoice do\nend\n")
+    main = tmp_path / "lib" / "main.ex"
+    main.write_text("alias Billing.Invoice\nimport ExternalLib.Helper\n")
+
+    edges = extract_imports(main, tmp_path)
+    by_name = {e.import_name: e for e in edges}
+
+    assert by_name["Billing.Invoice"].dst_file == str((lib / "invoice.ex").resolve())
+    # unresolvable module stays as its dotted name
+    assert by_name["ExternalLib.Helper"].dst_file == "ExternalLib.Helper"
+
+
+def test_elixir_multi_alias_yields_one_edge_per_module(tmp_path: Path):
+    lib = tmp_path / "lib" / "billing"
+    lib.mkdir(parents=True)
+    (lib / "invoice.ex").write_text("defmodule Billing.Invoice do\nend\n")
+    (lib / "receipt.ex").write_text("defmodule Billing.Receipt do\nend\n")
+    main = tmp_path / "lib" / "main.ex"
+    main.write_text("alias Billing.{Invoice, Receipt}\n")
+
+    edges = extract_imports(main, tmp_path)
+    by_name = {e.import_name: e for e in edges}
+
+    assert by_name["Billing.Invoice"].dst_file == str((lib / "invoice.ex").resolve())
+    assert by_name["Billing.Receipt"].dst_file == str((lib / "receipt.ex").resolve())
+
+
+def test_hcl_module_source_resolves_to_relative_path(tmp_path: Path):
+    vpc_dir = tmp_path / "modules" / "vpc"
+    vpc_dir.mkdir(parents=True)
+    (vpc_dir / "main.tf").write_text('resource "aws_vpc" "this" {}\n')
+    main = tmp_path / "main.tf"
+    main.write_text('module "vpc" {\n  source = "./modules/vpc"\n}\n')
+
+    edges = extract_imports(main, tmp_path)
+    assert len(edges) == 1
+    assert edges[0].dst_file == str(vpc_dir.resolve())
+
+
+def test_hcl_module_remote_source_stays_unresolved(tmp_path: Path):
+    main = tmp_path / "main.tf"
+    main.write_text('module "vpc" {\n  source = "terraform-aws-modules/vpc/aws"\n}\n')
+
+    edges = extract_imports(main, tmp_path)
+    assert len(edges) == 1
+    assert edges[0].dst_file == "terraform-aws-modules/vpc/aws"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -25,6 +26,10 @@ LANGUAGE_EXT: dict[str, str] = {
     ".h": "c",
     ".hpp": "cpp",
     ".rb": "ruby",
+    ".ex": "elixir",
+    ".exs": "elixir",
+    ".tf": "hcl",
+    ".tfvars": "hcl",
 }
 
 # Node types to extract per language (type → chunk_type label)
@@ -87,6 +92,11 @@ _NODE_TYPES: dict[str, dict[str, str]] = {
         "class": "class",
         "module": "class",
     },
+    # Elixir and HCL have no dedicated def/class node types — `defmodule Foo`,
+    # `def bar`, `resource "x" "y" {}` etc. all parse as generic `call`/`block`
+    # nodes. Dispatched via _CUSTOM_CHUNK_INFO instead of this table.
+    "elixir": {},
+    "hcl": {},
 }
 
 # Name field node types per language
@@ -174,6 +184,97 @@ def _extract_docstring(node: tree_sitter.Node, language: str, src: bytes) -> str
     return None
 
 
+_ELIXIR_DEF_KINDS: dict[str, str] = {
+    "defmodule": "class",
+    "defprotocol": "interface",
+    "defimpl": "class",
+    "def": "function",
+    "defp": "function",
+    "defmacro": "function",
+    "defmacrop": "function",
+    "defguard": "function",
+    "defguardp": "function",
+    "defdelegate": "function",
+}
+
+
+def _elixir_chunk_info(node: tree_sitter.Node, src: bytes) -> tuple[str, str] | None:
+    """Elixir has no def/class node types — `def foo`, `defmodule Foo`, etc.
+    are all `call` nodes whose first child identifier names the construct."""
+    if node.type != "call" or not node.children:
+        return None
+    head = node.children[0]
+    if head.type != "identifier":
+        return None
+    keyword = src[head.start_byte : head.end_byte].decode("utf-8", errors="replace")
+    chunk_type = _ELIXIR_DEF_KINDS.get(keyword)
+    if chunk_type is None:
+        return None
+
+    for child in node.children[1:]:
+        if child.type != "arguments":
+            continue
+        for arg in child.children:
+            if arg.type == "alias":  # defmodule Foo.Bar
+                return chunk_type, src[arg.start_byte : arg.end_byte].decode(
+                    "utf-8", errors="replace"
+                )
+            if arg.type in ("call", "identifier"):  # def foo(...), do: .. / def foo, do: ..
+                target = arg.children[0] if arg.type == "call" and arg.children else arg
+                if target.type == "identifier":
+                    return chunk_type, src[target.start_byte : target.end_byte].decode(
+                        "utf-8", errors="replace"
+                    )
+    return chunk_type, "<anonymous>"
+
+
+_HCL_BLOCK_KINDS: dict[str, str] = {
+    "resource": "class",
+    "data": "class",
+    "module": "class",
+    "provider": "class",
+    "variable": "function",
+    "output": "function",
+    "locals": "function",
+}
+
+
+def _hcl_chunk_info(node: tree_sitter.Node, src: bytes) -> tuple[str, str] | None:
+    """HCL top-level constructs are all `block` nodes — the block kind and its
+    labels are its first identifier + string_lit children."""
+    if node.type != "block" or not node.children:
+        return None
+    head = node.children[0]
+    if head.type != "identifier":
+        return None
+    keyword = src[head.start_byte : head.end_byte].decode("utf-8", errors="replace")
+    chunk_type = _HCL_BLOCK_KINDS.get(keyword)
+    if chunk_type is None:
+        return None
+
+    labels: list[str] = []
+    for child in node.children[1:]:
+        if child.type != "string_lit":
+            continue
+        for sub in child.children:
+            if sub.type == "template_literal":
+                labels.append(src[sub.start_byte : sub.end_byte].decode("utf-8", errors="replace"))
+
+    if not labels:
+        return chunk_type, "<anonymous>"
+    if keyword in ("resource", "data"):
+        return chunk_type, ".".join(labels)
+    return chunk_type, labels[-1]
+
+
+# Languages where def/class constructs aren't distinguishable by node.type
+# alone — see _elixir_chunk_info / _hcl_chunk_info for why.
+_CUSTOM_CHUNK_INFO: dict[str, Callable[[tree_sitter.Node, bytes], tuple[str, str] | None]] = {
+    "elixir": _elixir_chunk_info,
+    "hcl": _hcl_chunk_info,
+}
+
+
 def _walk_extract(
     node: tree_sitter.Node,
     src: bytes,
@@ -186,9 +287,18 @@ def _walk_extract(
     # is_named excludes keyword tokens — in Ruby the `class`/`module` keywords
     # themselves have node.type "class"/"module" and would match target_types.
     chunk_type = target_types.get(node.type) if node.is_named else None
+    name: str | None = None
+
+    if chunk_type is None and node.is_named:
+        custom = _CUSTOM_CHUNK_INFO.get(language)
+        if custom:
+            info = custom(node, src)
+            if info:
+                chunk_type, name = info
 
     if chunk_type:
-        name = _get_node_name(node, language, src)
+        if name is None:
+            name = _get_node_name(node, language, src)
         raw = src[node.start_byte : node.end_byte].decode("utf-8", errors="replace")
         docstring = _extract_docstring(node, language, src)
         chunk_id = Chunk.make_id(file_path, name, node.start_point[0])
@@ -260,6 +370,14 @@ def _make_parser(language: str):  # type: ignore[return]
             lang_obj = Language(mod.language())
         elif language == "ruby":
             import tree_sitter_ruby as mod  # type: ignore[no-redef]
+
+            lang_obj = Language(mod.language())
+        elif language == "elixir":
+            import tree_sitter_elixir as mod  # type: ignore[no-redef]
+
+            lang_obj = Language(mod.language())
+        elif language == "hcl":
+            import tree_sitter_hcl as mod  # type: ignore[no-redef]
 
             lang_obj = Language(mod.language())
         else:

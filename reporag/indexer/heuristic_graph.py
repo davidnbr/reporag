@@ -59,6 +59,10 @@ def extract_imports(file_path: Path, root: Path) -> list[HeuristicEdge]:
         return _java_imports(src, file_path, root)
     if suffix == ".rb":
         return _ruby_imports(src, file_path, root)
+    if suffix in (".ex", ".exs"):
+        return _elixir_imports(src, file_path, root)
+    if suffix in (".tf", ".tfvars"):
+        return _hcl_imports(src, file_path, root)
     return []
 
 
@@ -212,5 +216,70 @@ def _ruby_imports(src: str, file_path: Path, root: Path) -> list[HeuristicEdge]:
             base / "lib" / f"{spec}.rb",
         ]
         dst = next((str(c.resolve()) for c in candidates if c.exists()), spec)
+        edges.append(HeuristicEdge(str(file_path), dst, spec))
+    return edges
+
+
+# ── Elixir ───────────────────────────────────────────────────────────────────
+
+_ELIXIR_ALIAS = re.compile(
+    r"^\s*(?:alias|import|require|use)\s+([\w.]+(?:\{[\w,\s]+\})?)",
+    re.MULTILINE,
+)
+_CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
+
+
+def _camel_to_snake(name: str) -> str:
+    return _CAMEL_BOUNDARY.sub("_", name).lower()
+
+
+def _resolve_elixir_module(module: str, root: Path) -> str | None:
+    parts = [_camel_to_snake(p) for p in module.split(".")]
+    candidate = (root / "lib" / Path(*parts)).with_suffix(".ex")
+    return str(candidate) if candidate.exists() else None
+
+
+def _elixir_imports(src: str, file_path: Path, root: Path) -> list[HeuristicEdge]:
+    edges: list[HeuristicEdge] = []
+    for m in _ELIXIR_ALIAS.finditer(src):
+        spec = m.group(1)
+        if ".{" in spec:
+            prefix, rest = spec.split(".{", 1)
+            modules = [f"{prefix}.{n.strip()}" for n in rest.rstrip("}").split(",")]
+        else:
+            modules = [spec]
+        for module in modules:
+            dst = _resolve_elixir_module(module, root) or module
+            edges.append(HeuristicEdge(str(file_path), dst, module))
+    return edges
+
+
+# ── HCL ──────────────────────────────────────────────────────────────────────
+
+_HCL_MODULE = re.compile(r'module\s+"([^"]+)"\s*\{')
+_HCL_SOURCE = re.compile(r'^\s*source\s*=\s*"([^"]+)"', re.MULTILINE)
+
+
+def _hcl_imports(src: str, file_path: Path, root: Path) -> list[HeuristicEdge]:
+    edges: list[HeuristicEdge] = []
+    for m in _HCL_MODULE.finditer(src):
+        depth = 1
+        i = m.end()
+        while i < len(src) and depth > 0:
+            if src[i] == "{":
+                depth += 1
+            elif src[i] == "}":
+                depth -= 1
+            i += 1
+        body = src[m.end() : i - 1]
+        src_m = _HCL_SOURCE.search(body)
+        if not src_m:
+            continue
+        spec = src_m.group(1)
+        if spec.startswith("."):
+            candidate = (file_path.parent / spec).resolve()
+            dst = str(candidate) if candidate.exists() else spec
+        else:
+            dst = spec
         edges.append(HeuristicEdge(str(file_path), dst, spec))
     return edges
