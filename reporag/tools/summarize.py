@@ -30,7 +30,18 @@ def _extract_description(root: Path) -> str:
 
 
 _ENTRY_NAMES = {"main.py", "__main__.py", "server.py", "cli.py", "app.py", "manage.py", "run.py"}
-_SKIP_DIRS = {".devenv", ".venv", "venv", "env", "node_modules", ".git", "__pycache__"}
+_SKIP_DIRS = {
+    ".devenv",
+    ".venv",
+    "venv",
+    "env",
+    "node_modules",
+    ".git",
+    "__pycache__",
+    ".terraform",
+    "_build",
+    "deps",
+}
 
 
 async def run(

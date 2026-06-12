@@ -34,6 +34,9 @@ _EXCLUDE_DEFAULTS = {
     "vendor",
     "pkg",
     ".cache",
+    ".terraform",
+    "_build",
+    "deps",
 }
 
 # Files indexed first — LLMs ask about entry points immediately
