@@ -188,6 +188,28 @@ def test_parse_elixir_extracts_module_and_functions(tmp_path: Path):
     assert "quote" not in by_name
 
 
+def test_parse_elixir_skips_defs_inside_quote_block(tmp_path: Path):
+    pytest.importorskip("tree_sitter_elixir", reason="tree-sitter-elixir not installed")
+    code = textwrap.dedent("""\
+        defmodule Generator do
+          defmacro make_funcs do
+            quote do
+              def generated, do: :ok
+            end
+          end
+        end
+    """)
+    ex_file = tmp_path / "generator.ex"
+    ex_file.write_text(code)
+
+    chunks = parse_file(ex_file)
+    by_name = {c.name: c for c in chunks if c.chunk_type != "module"}
+
+    assert by_name["make_funcs"].chunk_type == "function"
+    # `def generated` only exists inside a quoted macro template — not a real def
+    assert "generated" not in by_name
+
+
 def test_detect_language_hcl():
     assert detect_language(Path("main.tf")) == "hcl"
 

@@ -170,3 +170,45 @@ def test_hcl_module_remote_source_stays_unresolved(tmp_path: Path):
     edges = extract_imports(main, tmp_path)
     assert len(edges) == 1
     assert edges[0].dst_file == "terraform-aws-modules/vpc/aws"
+
+
+def test_elixir_commented_alias_is_ignored(tmp_path: Path):
+    lib = tmp_path / "lib" / "billing"
+    lib.mkdir(parents=True)
+    (lib / "invoice.ex").write_text("defmodule Billing.Invoice do\nend\n")
+    main = tmp_path / "lib" / "main.ex"
+    main.write_text("# alias Billing.Invoice\nalias Billing.Receipt\n")
+
+    edges = extract_imports(main, tmp_path)
+    by_name = {e.import_name: e for e in edges}
+
+    assert "Billing.Invoice" not in by_name
+    assert "Billing.Receipt" in by_name
+
+
+def test_elixir_alias_resolves_in_umbrella_app(tmp_path: Path):
+    app_lib = tmp_path / "apps" / "billing" / "lib" / "billing"
+    app_lib.mkdir(parents=True)
+    (app_lib / "invoice.ex").write_text("defmodule Billing.Invoice do\nend\n")
+    main = tmp_path / "apps" / "web" / "lib" / "main.ex"
+    main.parent.mkdir(parents=True)
+    main.write_text("alias Billing.Invoice\n")
+
+    edges = extract_imports(main, tmp_path)
+    assert edges[0].dst_file == str((app_lib / "invoice.ex").resolve())
+
+
+def test_hcl_commented_module_block_is_ignored(tmp_path: Path):
+    main = tmp_path / "main.tf"
+    main.write_text(
+        '# module "old" {\n'
+        '#   source = "./modules/old"\n'
+        '# }\n'
+        'module "vpc" {\n'
+        '  source = "terraform-aws-modules/vpc/aws"\n'
+        '}\n'
+    )
+
+    edges = extract_imports(main, tmp_path)
+    assert len(edges) == 1
+    assert edges[0].import_name == "terraform-aws-modules/vpc/aws"

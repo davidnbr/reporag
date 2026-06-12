@@ -277,6 +277,15 @@ _CUSTOM_CHUNK_INFO: dict[str, Callable[[tree_sitter.Node, bytes], tuple[str, str
 }
 
 
+def _is_elixir_quote_call(node: tree_sitter.Node, language: str, src: bytes) -> bool:
+    """`quote do ... end` bodies are macro templates — any `def`/`defmodule`
+    etc. inside are quoted AST literals, not real definitions."""
+    if language != "elixir" or node.type != "call" or not node.children:
+        return False
+    head = node.children[0]
+    return head.type == "identifier" and src[head.start_byte : head.end_byte] == b"quote"
+
+
 def _walk_extract(
     node: tree_sitter.Node,
     src: bytes,
@@ -284,14 +293,15 @@ def _walk_extract(
     language: str,
     target_types: dict[str, str],
     parent_name: str | None = None,
+    suppress: bool = False,
 ) -> list[Chunk]:
     chunks: list[Chunk] = []
     # is_named excludes keyword tokens — in Ruby the `class`/`module` keywords
     # themselves have node.type "class"/"module" and would match target_types.
-    chunk_type = target_types.get(node.type) if node.is_named else None
+    chunk_type = target_types.get(node.type) if node.is_named and not suppress else None
     name: str | None = None
 
-    if chunk_type is None and node.is_named:
+    if not suppress and chunk_type is None and node.is_named:
         custom = _CUSTOM_CHUNK_INFO.get(language)
         if custom:
             info = custom(node, src)
@@ -323,8 +333,12 @@ def _walk_extract(
     else:
         new_parent = parent_name
 
+    child_suppress = suppress or _is_elixir_quote_call(node, language, src)
+
     for child in node.children:
-        chunks.extend(_walk_extract(child, src, file_path, language, target_types, new_parent))
+        chunks.extend(
+            _walk_extract(child, src, file_path, language, target_types, new_parent, child_suppress)
+        )
 
     return chunks
 

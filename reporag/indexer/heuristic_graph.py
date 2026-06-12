@@ -233,14 +233,35 @@ def _camel_to_snake(name: str) -> str:
     return _CAMEL_BOUNDARY.sub("_", name).lower()
 
 
+def _blank_comment_lines(src: str, markers: tuple[str, ...]) -> str:
+    """Replace whole-line comments with whitespace, preserving byte offsets
+    so regex match positions and brace-counting stay aligned."""
+    out_lines = []
+    for line in src.splitlines(keepends=True):
+        if line.lstrip().startswith(markers):
+            newline = "\n" if line.endswith("\n") else ""
+            out_lines.append(" " * (len(line) - len(newline)) + newline)
+        else:
+            out_lines.append(line)
+    return "".join(out_lines)
+
+
 def _resolve_elixir_module(module: str, root: Path) -> str | None:
     parts = [_camel_to_snake(p) for p in module.split(".")]
-    candidate = (root / "lib" / Path(*parts)).with_suffix(".ex")
-    return str(candidate.resolve()) if candidate.exists() else None
+    rel = Path(*parts).with_suffix(".ex")
+    candidate = root / "lib" / rel
+    if candidate.exists():
+        return str(candidate.resolve())
+    for app_lib in root.glob("apps/*/lib"):
+        candidate = app_lib / rel
+        if candidate.exists():
+            return str(candidate.resolve())
+    return None
 
 
 def _elixir_imports(src: str, file_path: Path, root: Path) -> list[HeuristicEdge]:
     edges: list[HeuristicEdge] = []
+    src = _blank_comment_lines(src, ("#",))
     for m in _ELIXIR_ALIAS.finditer(src):
         spec = m.group(1)
         if ".{" in spec:
@@ -262,6 +283,7 @@ _HCL_SOURCE = re.compile(r'^\s*source\s*=\s*"([^"]+)"', re.MULTILINE)
 
 def _hcl_imports(src: str, file_path: Path, root: Path) -> list[HeuristicEdge]:
     edges: list[HeuristicEdge] = []
+    src = _blank_comment_lines(src, ("#", "//"))
     for m in _HCL_MODULE.finditer(src):
         depth = 1
         i = m.end()
