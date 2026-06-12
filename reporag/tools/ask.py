@@ -61,8 +61,10 @@ async def run(
     arguments: dict[str, Any],
     runtime: Runtime,  # type: ignore[name-defined]  # noqa: F821
 ) -> dict[str, Any]:
+    from reporag.projects import default_root
+
     raw_query: str = arguments.get("query", "").strip()
-    project: str = arguments.get("project", "")
+    project: str = arguments.get("project", "").strip() or default_root()
 
     if not raw_query:
         return {"error": "query is required"}

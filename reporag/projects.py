@@ -75,3 +75,21 @@ def get(project: str) -> dict | None:
 
 def all_projects() -> dict:
     return _load()
+
+
+def default_root() -> str:
+    """Project scope to use when a tool call omits `project`.
+
+    Claude Code spawns MCP stdio servers with cwd = the session's project
+    directory, so the server cwd identifies the caller's project. If cwd is
+    a subdirectory of a registered project, return the registered root so
+    the scope covers the whole project.
+    """
+    cwd = str(Path.cwd().resolve())
+    registry = _load()
+    if cwd in registry:
+        return cwd
+    for key in registry:
+        if _is_subpath(cwd, key):
+            return key
+    return cwd

@@ -89,6 +89,30 @@ def test_get_symbol_finds_class_and_method(indexer: tuple[ChunkIndexer, GraphDB]
     assert method_rows[0]["symbol_type"] == "function"
 
 
+def test_get_symbol_project_filter_excludes_other_roots(tmp_path: Path):
+    """Same-named symbols in another project must not leak into a scoped lookup."""
+    graph_db = GraphDB(tmp_path / "graph.db")
+    for root in ("/projA", "/projB"):
+        graph_db.upsert_symbol(
+            {
+                "id": f"{root}-my_func",
+                "name": "my_func",
+                "file_path": f"{root}/mod.py",
+                "language": "python",
+                "symbol_type": "function",
+                "start_line": 1,
+                "end_line": 2,
+            }
+        )
+    graph_db.commit()
+
+    rows = graph_db.get_symbol("my_func", project="/projA")
+    assert [r["file_path"] for r in rows] == ["/projA/mod.py"]
+
+    rows_all = graph_db.get_symbol("my_func")
+    assert len(rows_all) == 2
+
+
 def test_reindex_modified_file_no_duplicate_symbols(
     indexer: tuple[ChunkIndexer, GraphDB], py_file: Path
 ):

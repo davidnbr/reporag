@@ -117,3 +117,30 @@ def test_corrupt_registry_returns_empty(registry_path):
     path.write_text("not json{{{")
     assert proj._load() == {}
     assert proj.get("/anything") is None
+
+
+def test_default_root_returns_registered_cwd(registry_path, monkeypatch, tmp_path):
+    _, proj = registry_path
+    root = tmp_path / "myproject"
+    root.mkdir()
+    proj.update(str(root.resolve()), chunks=10, files=2)
+    monkeypatch.chdir(root)
+    assert proj.default_root() == str(root.resolve())
+
+
+def test_default_root_maps_subdir_to_registered_root(registry_path, monkeypatch, tmp_path):
+    _, proj = registry_path
+    root = tmp_path / "myproject"
+    sub = root / "src" / "pkg"
+    sub.mkdir(parents=True)
+    proj.update(str(root.resolve()), chunks=10, files=2)
+    monkeypatch.chdir(sub)
+    assert proj.default_root() == str(root.resolve())
+
+
+def test_default_root_unregistered_cwd_falls_back_to_cwd(registry_path, monkeypatch, tmp_path):
+    _, proj = registry_path
+    alone = tmp_path / "alone"
+    alone.mkdir()
+    monkeypatch.chdir(alone)
+    assert proj.default_root() == str(alone.resolve())

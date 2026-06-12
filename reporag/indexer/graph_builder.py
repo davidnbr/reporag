@@ -100,13 +100,18 @@ class GraphDB:
     def commit(self) -> None:
         self._conn.commit()
 
-    def get_symbol(self, name: str, language: str | None = None) -> list[dict[str, Any]]:
+    def get_symbol(
+        self, name: str, language: str | None = None, project: str | None = None
+    ) -> list[dict[str, Any]]:
+        sql = "SELECT * FROM symbols WHERE name = ?"
+        params: list[Any] = [name]
         if language:
-            rows = self._conn.execute(
-                "SELECT * FROM symbols WHERE name = ? AND language = ?", (name, language)
-            ).fetchall()
-        else:
-            rows = self._conn.execute("SELECT * FROM symbols WHERE name = ?", (name,)).fetchall()
+            sql += " AND language = ?"
+            params.append(language)
+        if project:
+            sql += " AND file_path LIKE ?"
+            params.append(project.rstrip("/") + "/%")
+        rows = self._conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
 
     def load_networkx_graph(self) -> nx.DiGraph:

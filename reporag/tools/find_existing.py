@@ -56,7 +56,11 @@ async def run(
 
     cfg = runtime.config
     k: int = int(arguments.get("k", 10))
-    project_filter: str | None = arguments.get("project")
+    # Project scoping is mandatory: results from one repo must never leak into
+    # another. Default to the server's project (cwd-derived).
+    from reporag.projects import default_root
+
+    project_filter: str = arguments.get("project") or default_root()
 
     # ── Hybrid retrieval (same pipeline as query_code, no reranker) ──────────
     q_vec = runtime.embedder.encode_query(task)

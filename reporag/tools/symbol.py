@@ -17,6 +17,7 @@ async def run(
             name: str (required),
             language: str | None,
             fuzzy: bool (default False),
+            project: str | None — defaults to the server's project (cwd),
         }
     """
     name: str = arguments.get("name", "").strip()
@@ -26,17 +27,23 @@ async def run(
     language: str | None = arguments.get("language")
     fuzzy: bool = arguments.get("fuzzy", False)
 
+    # Project scoping is mandatory: symbols from one repo must never leak
+    # into another. Default to the server's project (cwd-derived).
+    from reporag.projects import default_root
+
+    project: str = arguments.get("project") or default_root()
+
     if fuzzy:
         # LanceDB semantic search for approximate name match
         q_vec = runtime.embedder.encode_query(name)
-        chunk_ids = runtime.dense.search(q_vec, k=5)
+        chunk_ids = runtime.dense.search(q_vec, k=5, project=project)
         chunks = runtime.dense.get_chunks(chunk_ids)
         if language:
             chunks = [c for c in chunks if c.get("language") == language]
         return {"results": _format_chunks(chunks[:5]), "mode": "fuzzy"}
 
     # Exact SQLite lookup — <50ms
-    rows = runtime.graph_db.get_symbol(name, language)
+    rows = runtime.graph_db.get_symbol(name, language, project=project)
     if not rows:
         return {"results": [], "mode": "exact", "message": f"Symbol '{name}' not found"}
 

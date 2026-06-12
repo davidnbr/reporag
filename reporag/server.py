@@ -308,7 +308,10 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "project": {
                         "type": "string",
-                        "description": "Restrict results to this absolute project root path",
+                        "description": (
+                            "Restrict results to this absolute project root path "
+                            "(default: the current project)"
+                        ),
                     },
                 },
                 "required": ["query"],
@@ -329,6 +332,13 @@ async def list_tools() -> list[types.Tool]:
                         "type": "boolean",
                         "default": False,
                         "description": "Use semantic search instead of exact match",
+                    },
+                    "project": {
+                        "type": "string",
+                        "description": (
+                            "Restrict results to this absolute project root path "
+                            "(default: the current project)"
+                        ),
                     },
                 },
                 "required": ["name"],
@@ -437,9 +447,14 @@ async def list_tools() -> list[types.Tool]:
                         "type": "string",
                         "description": "Natural language question about the project",
                     },
-                    "project": {"type": "string", "description": "Absolute path to project root"},
+                    "project": {
+                        "type": "string",
+                        "description": (
+                            "Absolute path to project root (default: the current project)"
+                        ),
+                    },
                 },
-                "required": ["query", "project"],
+                "required": ["query"],
             },
         ),
         types.Tool(
@@ -459,7 +474,10 @@ async def list_tools() -> list[types.Tool]:
                     },
                     "project": {
                         "type": "string",
-                        "description": "Restrict to this absolute project root path",
+                        "description": (
+                            "Restrict to this absolute project root path "
+                            "(default: the current project)"
+                        ),
                     },
                     "k": {
                         "type": "integer",

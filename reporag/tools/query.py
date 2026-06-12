@@ -43,7 +43,12 @@ async def run(
     k: int = int(arguments.get("k", 10))
     do_rerank: bool = arguments.get("rerank", cfg.rerank_by_default)
     lang_filter: list[str] | None = arguments.get("languages")
-    project_filter: str | None = arguments.get("project")  # filter by file path prefix
+    # Project scoping is mandatory: results from one repo must never leak into
+    # another. When the caller omits `project`, scope to the server's project
+    # (cwd-derived) instead of searching the shared index unscoped.
+    from reporag.projects import default_root
+
+    project_filter: str = arguments.get("project") or default_root()
 
     # ── 1. Dense retrieval ──────────────────────────────────────────────────
     q_vec = runtime.embedder.encode_query(query)
