@@ -125,6 +125,17 @@ def test_elixir_alias_resolves_camel_to_snake_path(tmp_path: Path):
     assert by_name["ExternalLib.Helper"].dst_file == "ExternalLib.Helper"
 
 
+def test_elixir_alias_resolves_acronym_module_name(tmp_path: Path):
+    lib = tmp_path / "lib" / "my_app"
+    lib.mkdir(parents=True)
+    (lib / "http_client.ex").write_text("defmodule MyApp.HTTPClient do\nend\n")
+    main = tmp_path / "lib" / "main.ex"
+    main.write_text("alias MyApp.HTTPClient\n")
+
+    edges = extract_imports(main, tmp_path)
+    assert edges[0].dst_file == str((lib / "http_client.ex").resolve())
+
+
 def test_elixir_multi_alias_yields_one_edge_per_module(tmp_path: Path):
     lib = tmp_path / "lib" / "billing"
     lib.mkdir(parents=True)

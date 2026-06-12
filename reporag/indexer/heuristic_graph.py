@@ -226,7 +226,7 @@ _ELIXIR_ALIAS = re.compile(
     r"^\s*(?:alias|import|require|use)\s+([\w.]+(?:\{[\w,\s]+\})?)",
     re.MULTILINE,
 )
-_CAMEL_BOUNDARY = re.compile(r"(?<!^)(?=[A-Z])")
+_CAMEL_BOUNDARY = re.compile(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])")
 
 
 def _camel_to_snake(name: str) -> str:
@@ -236,7 +236,7 @@ def _camel_to_snake(name: str) -> str:
 def _resolve_elixir_module(module: str, root: Path) -> str | None:
     parts = [_camel_to_snake(p) for p in module.split(".")]
     candidate = (root / "lib" / Path(*parts)).with_suffix(".ex")
-    return str(candidate) if candidate.exists() else None
+    return str(candidate.resolve()) if candidate.exists() else None
 
 
 def _elixir_imports(src: str, file_path: Path, root: Path) -> list[HeuristicEdge]:
