@@ -24,6 +24,7 @@ LANGUAGE_EXT: dict[str, str] = {
     ".cc": "cpp",
     ".h": "c",
     ".hpp": "cpp",
+    ".rb": "ruby",
 }
 
 # Node types to extract per language (type → chunk_type label)
@@ -80,6 +81,12 @@ _NODE_TYPES: dict[str, dict[str, str]] = {
         "class_specifier": "class",
         "struct_specifier": "class",
     },
+    "ruby": {
+        "method": "method",
+        "singleton_method": "method",
+        "class": "class",
+        "module": "class",
+    },
 }
 
 # Name field node types per language
@@ -93,6 +100,7 @@ _NAME_FIELDS: dict[str, list[str]] = {
     "java": ["name"],
     "c": ["declarator"],
     "cpp": ["declarator"],
+    "ruby": ["name"],
 }
 
 
@@ -175,7 +183,9 @@ def _walk_extract(
     parent_name: str | None = None,
 ) -> list[Chunk]:
     chunks: list[Chunk] = []
-    chunk_type = target_types.get(node.type)
+    # is_named excludes keyword tokens — in Ruby the `class`/`module` keywords
+    # themselves have node.type "class"/"module" and would match target_types.
+    chunk_type = target_types.get(node.type) if node.is_named else None
 
     if chunk_type:
         name = _get_node_name(node, language, src)
@@ -246,6 +256,10 @@ def _make_parser(language: str):  # type: ignore[return]
             lang_obj = Language(mod.language())
         elif language == "cpp":
             import tree_sitter_cpp as mod  # type: ignore[no-redef]
+
+            lang_obj = Language(mod.language())
+        elif language == "ruby":
+            import tree_sitter_ruby as mod  # type: ignore[no-redef]
 
             lang_obj = Language(mod.language())
         else:

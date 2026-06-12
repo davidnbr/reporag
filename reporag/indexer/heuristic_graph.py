@@ -57,6 +57,8 @@ def extract_imports(file_path: Path, root: Path) -> list[HeuristicEdge]:
         return _rust_imports(src, file_path, root)
     if suffix == ".java":
         return _java_imports(src, file_path, root)
+    if suffix == ".rb":
+        return _ruby_imports(src, file_path, root)
     return []
 
 
@@ -189,4 +191,26 @@ def _java_imports(src: str, file_path: Path, root: Path) -> list[HeuristicEdge]:
         candidate = root / Path("src", "main", "java", *parts).with_suffix(".java")
         dst = str(candidate) if candidate.exists() else fqn
         edges.append(HeuristicEdge(str(file_path), dst, fqn))
+    return edges
+
+
+# ── Ruby ─────────────────────────────────────────────────────────────────────
+
+_RUBY_REQUIRE = re.compile(
+    r"""^\s*(require_relative|require)\s+['"]([^'"]+)['"]""",
+    re.MULTILINE,
+)
+
+
+def _ruby_imports(src: str, file_path: Path, root: Path) -> list[HeuristicEdge]:
+    edges: list[HeuristicEdge] = []
+    for m in _RUBY_REQUIRE.finditer(src):
+        kind, spec = m.group(1), m.group(2)
+        base = file_path.parent if kind == "require_relative" else root
+        candidates = [
+            (base / spec).with_suffix(".rb"),
+            base / "lib" / f"{spec}.rb",
+        ]
+        dst = next((str(c.resolve()) for c in candidates if c.exists()), spec)
+        edges.append(HeuristicEdge(str(file_path), dst, spec))
     return edges

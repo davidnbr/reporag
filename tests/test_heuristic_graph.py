@@ -82,3 +82,29 @@ def test_unresolved_module_kept_as_name(tmp_path: Path):
     edges = extract_imports(f, tmp_path)
     assert len(edges) == 1
     assert edges[0].dst_file == "requests"
+
+
+def test_ruby_require_relative_resolves_to_sibling(tmp_path: Path):
+    helper = tmp_path / "helper.rb"
+    helper.write_text("def help_me; end\n")
+    main = tmp_path / "main.rb"
+    main.write_text("require 'json'\nrequire_relative 'helper'\n")
+
+    edges = extract_imports(main, tmp_path)
+    by_name = {e.import_name: e for e in edges}
+
+    assert by_name["helper"].dst_file == str(helper.resolve())
+    # external gem stays unresolved as its require name
+    assert by_name["json"].dst_file == "json"
+
+
+def test_ruby_require_resolves_from_lib(tmp_path: Path):
+    lib = tmp_path / "lib"
+    lib.mkdir()
+    (lib / "billing.rb").write_text("module Billing; end\n")
+    main = tmp_path / "main.rb"
+    main.write_text("require 'billing'\n")
+
+    edges = extract_imports(main, tmp_path)
+    assert len(edges) == 1
+    assert edges[0].dst_file == str((lib / "billing.rb").resolve())

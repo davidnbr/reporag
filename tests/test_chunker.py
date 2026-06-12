@@ -108,6 +108,43 @@ def test_parse_typescript(ts_file: Path):
     assert any(n in names for n in ("AuthService", "hashPassword", "login"))
 
 
+def test_detect_language_ruby():
+    assert detect_language(Path("app/models/invoice.rb")) == "ruby"
+
+
+def test_parse_ruby_extracts_classes_and_methods(tmp_path: Path):
+    pytest.importorskip("tree_sitter_ruby", reason="tree-sitter-ruby not installed")
+    code = textwrap.dedent("""\
+        require 'json'
+
+        module Billing
+          class Invoice
+            def total
+              42
+            end
+
+            def self.build(data)
+              new
+            end
+          end
+        end
+    """)
+    rb_file = tmp_path / "invoice.rb"
+    rb_file.write_text(code)
+
+    chunks = parse_file(rb_file)
+    by_name = {c.name: c for c in chunks}
+
+    assert by_name["Billing"].chunk_type == "class"
+    assert by_name["Invoice"].chunk_type == "class"
+    assert by_name["Invoice"].parent_name == "Billing"
+    assert by_name["total"].chunk_type == "method"
+    assert by_name["total"].parent_name == "Invoice"
+    assert by_name["build"].chunk_type == "method"
+    # Keyword tokens (`class`, `module`) must not produce anonymous chunks
+    assert all(c.name != "<anonymous>" for c in chunks)
+
+
 def test_semantic_text_function():
     chunk = Chunk(
         id="x",

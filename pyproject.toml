@@ -27,6 +27,7 @@ dependencies = [
     "tree-sitter-java>=0.23.0",
     "tree-sitter-c>=0.23.0",
     "tree-sitter-cpp>=0.23.0",
+    "tree-sitter-ruby>=0.23.0",
     # SCIP protobuf parsing (heuristic fallback used if no SCIP CLI installed)
     # scip PyPI package excluded — pulls aicsimageio→lxml (C build deps, unrelated)
     "protobuf>=4.25.0",
