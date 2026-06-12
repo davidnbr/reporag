@@ -25,9 +25,7 @@ from reporag.tools.index import _run_index_bg, run
 
 def test_no_change_skips_graph_and_registry(monkeypatch):
     build_graph_mock = Mock()
-    monkeypatch.setattr(
-        "reporag.indexer.graph_builder.build_graph_for_project", build_graph_mock
-    )
+    monkeypatch.setattr("reporag.indexer.graph_builder.build_graph_for_project", build_graph_mock)
     update_mock = Mock()
     monkeypatch.setattr("reporag.projects.update", update_mock)
 
@@ -398,9 +396,7 @@ def test_interrupted_index_resumes_from_last_batch(tmp_path: Path):
 
     with pytest.raises(RuntimeError, match="session killed"):
         asyncio.run(
-            runtime.chunker.index_files_batched_async(
-                files, incremental=True, file_batch_size=1
-            )
+            runtime.chunker.index_files_batched_async(files, incremental=True, file_batch_size=1)
         )
 
     # First batch persisted: chunks in dense, meta row recorded.

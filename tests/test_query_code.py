@@ -77,7 +77,9 @@ def _chunk(chunk_id: str, file_path: str, name: str = "f") -> dict[str, Any]:
     }
 
 
-def _runtime(ids: list[str], chunks: dict[str, dict[str, Any]], graph: nx.DiGraph | None = None) -> Any:
+def _runtime(
+    ids: list[str], chunks: dict[str, dict[str, Any]], graph: nx.DiGraph | None = None
+) -> Any:
     return SimpleNamespace(
         config=_CFG,
         embedder=_FakeEmbedder(),

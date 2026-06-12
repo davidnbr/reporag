@@ -125,7 +125,9 @@ def test_fuzzy_match_uses_dense_search_and_filters_language() -> None:
 
 
 def test_missing_name_returns_error() -> None:
-    runtime = SimpleNamespace(graph_db=_FakeGraphDB({}), embedder=_FakeEmbedder(), dense=_FakeDense([], {}))
+    runtime = SimpleNamespace(
+        graph_db=_FakeGraphDB({}), embedder=_FakeEmbedder(), dense=_FakeDense([], {})
+    )
 
     result = asyncio.run(run({}, runtime))
 

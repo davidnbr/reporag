@@ -117,7 +117,9 @@ async def run(
             f"Existing {chunk_type} '{name}' at {file_path}:{start_line}. "
             f"{description}. Import/extend instead of reimplementing."
         )
-        signature = chunk.get("raw_content", "").splitlines()[0][:200] if chunk.get("raw_content") else ""
+        signature = (
+            chunk.get("raw_content", "").splitlines()[0][:200] if chunk.get("raw_content") else ""
+        )
         score = fused.get(chunk.get("id", ""), 0.0) / top_score if top_score > 0 else 0.0
         results.append(
             {

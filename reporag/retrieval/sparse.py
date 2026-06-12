@@ -52,7 +52,9 @@ class BM25Index:
         self._doc_files: list[str] = []
         self._corpus: list[str] = []
 
-    def build(self, doc_ids: list[str], texts: list[str], doc_files: list[str] | None = None) -> None:
+    def build(
+        self, doc_ids: list[str], texts: list[str], doc_files: list[str] | None = None
+    ) -> None:
         """Build BM25 index from doc IDs, their semantic texts, and source file paths.
 
         `doc_files` (parallel to `doc_ids`) enables project-scoped search via

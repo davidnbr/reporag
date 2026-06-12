@@ -35,7 +35,9 @@ class _FakeDense:
         self._dense_ids = dense_ids
         self._chunks = chunks
 
-    def search(self, q_vec: Any, k: int, project: str | None = None, languages: Any = None) -> list[str]:
+    def search(
+        self, q_vec: Any, k: int, project: str | None = None, languages: Any = None
+    ) -> list[str]:
         return self._dense_ids[:k]
 
     def get_chunks(self, ids: list[str]) -> list[dict[str, Any]]:
