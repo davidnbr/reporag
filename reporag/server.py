@@ -26,6 +26,15 @@ from mcp.server import Server
 
 from reporag.config import Config, get_config
 
+# MCP speaks JSON-RPC over stdout; any stray byte on fd 1 corrupts the stream.
+# Silence ML library progress bars (HF downloads, tqdm encode batches) which
+# would otherwise spam the channel. _serve() additionally isolates fd 1 so even
+# native/trust_remote_code prints cannot reach the protocol stream.
+os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("TQDM_DISABLE", "1")
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
@@ -541,6 +550,22 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
 
 
 async def _serve() -> None:
+    import sys
+    from io import TextIOWrapper
+
+    import anyio
+
+    # Hand the transport a private copy of the real stdout, then redirect fd 1
+    # to stderr. After this, every other write path (Python prints, ML library
+    # output, native extensions) lands on stderr and can never corrupt the
+    # JSON-RPC frames the MCP client parses on stdout.
+    real_stdout_fd = os.dup(1)
+    os.dup2(2, 1)
+    sys.stdout = sys.stderr
+    transport_stdout = anyio.wrap_file(
+        TextIOWrapper(os.fdopen(real_stdout_fd, "wb"), encoding="utf-8")
+    )
+
     _runtime.initialize()
     _runtime._loop = asyncio.get_running_loop()
     _runtime.index_sem = asyncio.Semaphore(1)  # serialise concurrent index runs
@@ -551,7 +576,10 @@ async def _serve() -> None:
         asyncio.create_task(_runtime._auto_index())
 
     try:
-        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        async with mcp.server.stdio.stdio_server(stdout=transport_stdout) as (
+            read_stream,
+            write_stream,
+        ):
             await server.run(read_stream, write_stream, server.create_initialization_options())
     finally:
         if _runtime._watcher is not None:
