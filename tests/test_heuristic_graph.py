@@ -203,10 +203,10 @@ def test_hcl_commented_module_block_is_ignored(tmp_path: Path):
     main.write_text(
         '# module "old" {\n'
         '#   source = "./modules/old"\n'
-        '# }\n'
+        "# }\n"
         'module "vpc" {\n'
         '  source = "terraform-aws-modules/vpc/aws"\n'
-        '}\n'
+        "}\n"
     )
 
     edges = extract_imports(main, tmp_path)

@@ -66,9 +66,9 @@ class BM25Index:
         self._doc_files = doc_files if doc_files is not None else []
         self._corpus = texts
         tokenized = [_code_tokenize(t) for t in texts]
-        corpus_tokens = bm25s.tokenize(tokenized, stopwords="en")
+        corpus_tokens = bm25s.tokenize(tokenized, stopwords="en", show_progress=False)
         self._retriever = bm25s.BM25(k1=self.k1, b=self.b)
-        self._retriever.index(corpus_tokens)
+        self._retriever.index(corpus_tokens, show_progress=False)
 
     def search(self, query: str, k: int = 50, project: str | None = None) -> list[str]:
         """Return top-k doc IDs ranked by BM25 score.
@@ -85,8 +85,8 @@ class BM25Index:
         retrieve_k = k * 4 if use_project_filter else k
         retrieve_k = min(retrieve_k, len(self._doc_ids))
 
-        query_tokens = bm25s.tokenize([_code_tokenize(query)], stopwords="en")
-        results, _ = self._retriever.retrieve(query_tokens, k=retrieve_k)
+        query_tokens = bm25s.tokenize([_code_tokenize(query)], stopwords="en", show_progress=False)
+        results, _ = self._retriever.retrieve(query_tokens, k=retrieve_k, show_progress=False)
         # results shape: (n_queries, k) — first query only
         indices = results[0].tolist() if hasattr(results[0], "tolist") else list(results[0])
         ids = [self._doc_ids[int(i)] for i in indices if int(i) < len(self._doc_ids)]

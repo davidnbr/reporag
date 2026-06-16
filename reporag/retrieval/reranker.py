@@ -58,7 +58,7 @@ class CrossEncoderReranker:
             return self._cache[key]
         self._load()
         pairs = [(query, c.get(text_key, c.get("raw_content", ""))) for c in chunks]
-        scores: list[float] = self._model.predict(pairs).tolist()
+        scores: list[float] = self._model.predict(pairs, show_progress_bar=False).tolist()
         for chunk, score in zip(chunks, scores):
             chunk["rerank_score"] = score
         result = sorted(chunks, key=lambda c: c.get("rerank_score", 0.0), reverse=True)

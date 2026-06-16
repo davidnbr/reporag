@@ -31,12 +31,41 @@ from reporag.config import Config, get_config
 # would otherwise spam the channel. _serve() additionally isolates fd 1 so even
 # native/trust_remote_code prints cannot reach the protocol stream.
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
+os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("TRANSFORMERS_NO_ADVISORY_WARNINGS", "1")
+os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 os.environ.setdefault("TQDM_DISABLE", "1")
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+# MCP clients (e.g. Cursor) surface every stderr line as an "[error]" entry in
+# their log panel, so default to WARNING to keep it quiet. Override with
+# REPORAG_LOG_LEVEL=INFO/DEBUG when debugging. Noisy third-party loggers that
+# log per-request or per-HTTP-call are clamped regardless. We route warnings
+# through logging (captureWarnings) and mute them at the logger level rather
+# than swallowing them globally, so they stay recoverable via REPORAG_LOG_LEVEL.
+_log_level = getattr(
+    logging, os.environ.get("REPORAG_LOG_LEVEL", "WARNING").upper(), logging.WARNING
+)
+logging.basicConfig(level=_log_level, format="%(asctime)s %(name)s %(levelname)s %(message)s")
+logging.captureWarnings(True)  # route warnings.warn() through logging so we can mute it
 logger = logging.getLogger(__name__)
+logger.setLevel(_log_level)
+
+# Quiet third-party chatter only in the default quiet mode. When the operator
+# explicitly opts into INFO/DEBUG, let everything through so nothing is hidden
+# while debugging — clamping here would otherwise override the requested level.
+if _log_level > logging.DEBUG:
+    for _noisy in ("mcp", "httpx", "httpcore", "urllib3"):
+        logging.getLogger(_noisy).setLevel(logging.WARNING)
+    for _silent in (
+        "py.warnings",
+        "sentence_transformers",
+        "transformers",
+        "transformers_modules",
+        "huggingface_hub",
+        "huggingface_hub.utils._http",
+    ):
+        logging.getLogger(_silent).setLevel(logging.ERROR)
 
 
 @dataclass

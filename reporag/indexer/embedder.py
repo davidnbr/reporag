@@ -78,7 +78,7 @@ class Embedder:
             return self._st_model.encode(  # type: ignore[union-attr]
                 prefixed,
                 batch_size=batch_size,
-                show_progress_bar=len(texts) > 100,
+                show_progress_bar=False,
                 normalize_embeddings=True,
             ).astype(np.float32)
         return self._encode_ollama_batch(prefixed)
@@ -90,6 +90,7 @@ class Embedder:
             self._load_st()
             vec = self._st_model.encode(  # type: ignore[union-attr]
                 prefixed,
+                show_progress_bar=False,
                 normalize_embeddings=True,
             )
             return np.array(vec[0], dtype=np.float32)
