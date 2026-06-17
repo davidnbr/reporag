@@ -423,6 +423,25 @@ def test_codex_impl_all_hooks_shell_wrapped_with_format(tmp_path, monkeypatch):
         assert "REPORAG_HOOK_FORMAT=codex" in line
 
 
+def test_codex_impl_userpromptsubmit_omits_matcher(tmp_path, monkeypatch):
+    """Codex ignores matcher for UserPromptSubmit — it must not be emitted there."""
+    import tomllib
+
+    pkg = _fake_hooks_dir_full(tmp_path)
+    codex_dir = tmp_path / "codex"
+    import reporag.setup as srv
+
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
+    _setup_codex_impl(codex_dir, verbose=False)
+    parsed = tomllib.loads((codex_dir / "config.toml").read_text())
+
+    ups = parsed["hooks"]["UserPromptSubmit"]
+    assert all("matcher" not in group for group in ups)
+    # events that DO support matcher still carry it
+    assert parsed["hooks"]["PreToolUse"][0]["matcher"] == "apply_patch"
+    assert parsed["hooks"]["SessionStart"][0]["matcher"] == ".*"
+
+
 def test_codex_impl_honors_codex_home_default(tmp_path, monkeypatch):
     import reporag.setup as srv
 

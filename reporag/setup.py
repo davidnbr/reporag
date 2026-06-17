@@ -347,17 +347,23 @@ def _codex_hook_command(script: Path) -> str:
     return f"sh -c {shlex.quote(inner)}"
 
 
-def _codex_hook_table(event: str, matcher: str, script: Path) -> list[str]:
-    """Render one ``[[hooks.<event>]]`` command-hook table as TOML lines."""
-    return [
-        f"[[hooks.{event}]]",
-        f"matcher = {_toml_str(matcher)}",
+def _codex_hook_table(event: str, matcher: str | None, script: Path) -> list[str]:
+    """Render one ``[[hooks.<event>]]`` command-hook table as TOML lines.
+
+    `matcher` is omitted when None — Codex ignores it for events like
+    UserPromptSubmit, so emitting one there would just be misleading noise.
+    """
+    lines = [f"[[hooks.{event}]]"]
+    if matcher is not None:
+        lines.append(f"matcher = {_toml_str(matcher)}")
+    lines += [
         f"[[hooks.{event}.hooks]]",
         'type = "command"',
         f"command = {_toml_str(_codex_hook_command(script))}",
         "timeout = 30",
         "",
     ]
+    return lines
 
 
 def _codex_managed_block(codex_dir: Path) -> str:
@@ -376,7 +382,7 @@ def _codex_managed_block(codex_dir: Path) -> str:
         "startup_timeout_sec = 30",
         "tool_timeout_sec = 120",
         "",
-        *_codex_hook_table("UserPromptSubmit", ".*", hooks_dir / "reporag-hint.py"),
+        *_codex_hook_table("UserPromptSubmit", None, hooks_dir / "reporag-hint.py"),
         *_codex_hook_table(
             "PreToolUse", "apply_patch", hooks_dir / "reporag-dupcheck.py"
         ),
