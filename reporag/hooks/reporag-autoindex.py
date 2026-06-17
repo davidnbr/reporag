@@ -14,6 +14,14 @@ import os
 import sys
 from pathlib import Path
 
+
+def _emit(text: str, event: str) -> None:
+    if os.environ.get("REPORAG_HOOK_FORMAT") == "codex":
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
+    else:
+        print(text)
+
+
 try:
     data = json.load(sys.stdin)
     cwd = data.get("cwd", "").rstrip("/")
@@ -41,14 +49,15 @@ try:
     )
 
     if not is_indexed:
-        print(
+        _emit(
             f'[reporag] ACTION: {cwd} is unindexed — call index_codebase(path="{cwd}") '
             f"now, before doing anything else. It runs in the background (first results "
             f"in seconds, check via index_status), so starting it costs nothing. Once "
             f"indexed, ground answers in real code with query_code / get_symbol / "
             f"get_architecture / ask_project instead of guessing — that's the difference "
             f"between a correct answer and a plausible-sounding one. "
-            f"(Create .reporag-ignore in project root to silence this.)"
+            f"(Create .reporag-ignore in project root to silence this.)",
+            "SessionStart",
         )
 except Exception:
     pass  # never break Claude Code

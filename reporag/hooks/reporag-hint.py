@@ -14,6 +14,14 @@ import os
 import sys
 from pathlib import Path
 
+
+def _emit(text: str, event: str) -> None:
+    if os.environ.get("REPORAG_HOOK_FORMAT") == "codex":
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
+    else:
+        print(text)
+
+
 try:
     data = json.load(sys.stdin)
     cwd: str = data.get("cwd", "").rstrip("/")
@@ -72,22 +80,24 @@ try:
         is_impl = any(kw in prompt for kw in impl_keywords)
 
         if is_impl:
-            print(
+            _emit(
                 f"[reporag] {best_proj} is indexed ({chunks:,} chunks) — "
                 f"BEFORE WRITING NEW CODE: call find_existing(task=<your task description>, "
                 f"project={best_proj!r}) to surface existing functions and patterns you should "
                 f"reuse. Prevents duplication. "
                 f"Also available: query_code (semantic search), get_symbol (exact lookup), "
-                f"get_architecture (module topology)."
+                f"get_architecture (module topology).",
+                "UserPromptSubmit",
             )
         else:
-            print(
+            _emit(
                 f"[reporag] {best_proj} is indexed ({chunks:,} chunks) — USE IT before answering, "
                 f"don't guess from training data: query_code (semantic search for relevant snippets), "
                 f"get_symbol (jump to a function/class def + refs), get_architecture (module/dependency "
                 f"overview), ask_project (natural-language Q&A grounded in the indexed code), "
                 f"summarize_project (high-level summary). Pick the one matching the question; "
-                f"grounding in real code beats a plausible-sounding guess."
+                f"grounding in real code beats a plausible-sounding guess.",
+                "UserPromptSubmit",
             )
 except Exception:
     pass  # never break Claude Code

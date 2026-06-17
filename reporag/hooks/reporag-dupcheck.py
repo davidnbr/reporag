@@ -18,7 +18,17 @@ import sqlite3
 import sys
 from pathlib import Path
 
+
+def _emit(text: str, event: str) -> None:
+    if os.environ.get("REPORAG_HOOK_FORMAT") == "codex":
+        print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
+    else:
+        print(text)
+
+
 _DEF_RE = re.compile(r"^\s*(?:def|class|function)\s+(\w+)", re.MULTILINE)
+
+_PATCH_FILE_RE = re.compile(r"^\*\*\* (?:Add|Update) File: (.+)$", re.MULTILINE)
 
 _MAX_WARNINGS = 5
 
@@ -26,6 +36,24 @@ _MAX_WARNINGS = 5
 def extract_names(content: str) -> set[str]:
     """Return the set of top-level def/class/function names in `content`."""
     return set(_DEF_RE.findall(content))
+
+
+def parse_apply_patch(command: str) -> tuple[str, str]:
+    """Extract (first target file, added-line content) from a Codex apply_patch body.
+
+    Codex exposes file writes via the apply_patch tool as a single patch string in
+    tool_input.command. Added lines start with '+' (excluding the '*** Add File:'
+    headers); we strip the leading '+' so the def/class regex matches recovered code.
+    """
+    if "*** Begin Patch" not in command and "*** Add File:" not in command:
+        return "", ""
+    files = _PATCH_FILE_RE.findall(command)
+    added = [
+        line[1:]
+        for line in command.splitlines()
+        if line.startswith("+") and not line.startswith("+++")
+    ]
+    return (files[0].strip() if files else ""), "\n".join(added)
 
 
 def find_collisions(
@@ -53,6 +81,9 @@ def main() -> None:
         file_path = tool_input.get("file_path", "")
         content = tool_input.get("content") or tool_input.get("new_string") or ""
         if not content:
+            # Codex apply_patch: file writes arrive as a patch string in tool_input.command
+            file_path, content = parse_apply_patch(tool_input.get("command", "") or "")
+        if not content:
             return
 
         names = extract_names(content)
@@ -62,11 +93,13 @@ def main() -> None:
         data_dir = Path(os.environ.get("REPORAG_DATA_DIR", "~/.local/share/reporag")).expanduser()
         collisions = find_collisions(data_dir / "dependency_graph.db", names, file_path)
 
-        for name, fp, line in collisions[:_MAX_WARNINGS]:
-            print(
-                f"[reporag] WARNING: '{name}' already exists at {fp}:{line} — "
-                f"verify you're not duplicating before writing."
-            )
+        warnings = [
+            f"[reporag] WARNING: '{name}' already exists at {fp}:{line} — "
+            f"verify you're not duplicating before writing."
+            for name, fp, line in collisions[:_MAX_WARNINGS]
+        ]
+        if warnings:
+            _emit("\n".join(warnings), "PreToolUse")
     except Exception:
         pass  # never break Claude Code
 

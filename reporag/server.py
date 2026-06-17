@@ -15,6 +15,8 @@ import asyncio
 import json
 import logging
 import os
+import re
+import shlex
 import threading
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -642,8 +644,13 @@ def _default_claude_dir() -> Path:
     return Path(os.environ.get("CLAUDE_CONFIG_DIR", "~/.claude")).expanduser()
 
 
-def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
-    """Install reporag Claude Code hooks. Returns True if settings changed."""
+def _default_codex_dir() -> Path:
+    """Resolve Codex CLI config dir, honoring CODEX_HOME override."""
+    return Path(os.environ.get("CODEX_HOME", "~/.codex")).expanduser()
+
+
+def _copy_hook_scripts(dest_dir: Path, verbose: bool = False) -> bool:
+    """Copy packaged reporag-*.py hook scripts into dest_dir. Returns True if any file changed."""
     import shutil
 
     pkg_hooks = Path(__file__).parent / "hooks"
@@ -652,18 +659,32 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
             print(f"Hook scripts not found at {pkg_hooks}")
         return False
 
-    hooks_dir = claude_dir / "hooks"
-    hooks_dir.mkdir(parents=True, exist_ok=True)
+    dest_dir.mkdir(parents=True, exist_ok=True)
 
+    changed = False
     for hook_file in sorted(pkg_hooks.glob("reporag-*.py")):
-        dest = hooks_dir / hook_file.name
+        dest = dest_dir / hook_file.name
         if not dest.exists() or hook_file.stat().st_mtime > dest.stat().st_mtime:
             shutil.copy2(hook_file, dest)
             dest.chmod(0o755)
+            changed = True
             if verbose:
                 print(f"  copied: {dest}")
         elif verbose:
             print(f"  up-to-date: {dest}")
+    return changed
+
+
+def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
+    """Install reporag Claude Code hooks. Returns True if settings changed."""
+    pkg_hooks = Path(__file__).parent / "hooks"
+    if not pkg_hooks.exists():
+        if verbose:
+            print(f"Hook scripts not found at {pkg_hooks}")
+        return False
+
+    hooks_dir = claude_dir / "hooks"
+    _copy_hook_scripts(hooks_dir, verbose=verbose)
 
     settings_path = claude_dir / "settings.json"
     try:
@@ -866,6 +887,118 @@ def _setup_cursor_impl(cursor_dir: Path, verbose: bool = False) -> bool:
     return changed
 
 
+_CODEX_BEGIN_MARKER = "# >>> reporag managed (do not edit) >>>"
+_CODEX_END_MARKER = "# <<< reporag managed <<<"
+
+
+def _toml_str(s: str) -> str:
+    """Quote a string as a TOML basic string."""
+    return '"' + s.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def _codex_managed_block(codex_dir: Path) -> str:
+    """Build the reporag-managed TOML block (MCP server + hooks) for Codex config.toml."""
+    hooks_dir = codex_dir / "hooks"
+
+    def _cmd(script: Path) -> str:
+        # Wrap in `sh -c` so the REPORAG_HOOK_FORMAT env prefix is honored regardless of
+        # whether Codex executes the command via a shell or splits argv directly. All three
+        # hooks emit Codex JSON, so all set the env. shlex.quote guards paths with spaces/quotes.
+        inner = f"REPORAG_HOOK_FORMAT=codex exec /usr/bin/env python3 {shlex.quote(str(script))}"
+        return f"sh -c {shlex.quote(inner)}"
+
+    args_toml = ", ".join(_toml_str(a) for a in _MCP_CONFIG_BLOCK["args"])
+    env_toml = ", ".join(f"{k} = {_toml_str(v)}" for k, v in _MCP_CONFIG_BLOCK["env"].items())
+
+    lines = [
+        _CODEX_BEGIN_MARKER,
+        "[mcp_servers.reporag]",
+        f'command = {_toml_str(_MCP_CONFIG_BLOCK["command"])}',
+        f"args = [{args_toml}]",
+        f"env = {{ {env_toml} }}",
+        "enabled = true",
+        "startup_timeout_sec = 30",
+        "tool_timeout_sec = 120",
+        "",
+        "[[hooks.UserPromptSubmit]]",
+        'matcher = ".*"',
+        "[[hooks.UserPromptSubmit.hooks]]",
+        'type = "command"',
+        f"command = {_toml_str(_cmd(hooks_dir / 'reporag-hint.py'))}",
+        "timeout = 30",
+        "",
+        "[[hooks.PreToolUse]]",
+        'matcher = "apply_patch"',
+        "[[hooks.PreToolUse.hooks]]",
+        'type = "command"',
+        f"command = {_toml_str(_cmd(hooks_dir / 'reporag-dupcheck.py'))}",
+        "timeout = 30",
+        "",
+        "[[hooks.SessionStart]]",
+        'matcher = ".*"',
+        "[[hooks.SessionStart.hooks]]",
+        'type = "command"',
+        f"command = {_toml_str(_cmd(hooks_dir / 'reporag-autoindex.py'))}",
+        "timeout = 30",
+        _CODEX_END_MARKER,
+    ]
+    return "\n".join(lines)
+
+
+def _splice_managed_block(existing_text: str, block: str) -> str:
+    """Replace the marker-delimited region in existing_text with block, or append if absent."""
+    if _CODEX_BEGIN_MARKER in existing_text and _CODEX_END_MARKER in existing_text:
+        pattern = re.compile(
+            re.escape(_CODEX_BEGIN_MARKER) + r".*?" + re.escape(_CODEX_END_MARKER),
+            re.DOTALL,
+        )
+        return pattern.sub(lambda _: block, existing_text, count=1)
+    if existing_text and not existing_text.endswith("\n"):
+        existing_text += "\n"
+    sep = "\n" if existing_text else ""
+    return existing_text + sep + block + "\n"
+
+
+def _setup_codex_impl(codex_dir: Path, verbose: bool = False) -> bool:
+    """Write ~/.codex/config.toml managed block + install hook scripts. Returns True if changed."""
+    import tomllib
+
+    _copy_hook_scripts(codex_dir / "hooks", verbose=verbose)
+
+    config_path = codex_dir / "config.toml"
+    existing_text = config_path.read_text() if config_path.exists() else ""
+
+    block = _codex_managed_block(codex_dir)
+    final_text = _splice_managed_block(existing_text, block)
+
+    try:
+        tomllib.loads(final_text)
+    except tomllib.TOMLDecodeError as exc:
+        msg = (
+            f"  warning: assembled {config_path} would be invalid TOML ({exc}) — "
+            "skipping to avoid data loss. Check for a conflicting [mcp_servers.reporag] "
+            "table outside the reporag-managed block."
+        )
+        if verbose:
+            print(msg)
+        else:
+            logger.warning(msg)
+        return False
+
+    if final_text == existing_text:
+        if verbose:
+            print(f"  unchanged: {config_path}")
+        return False
+
+    codex_dir.mkdir(parents=True, exist_ok=True)
+    tmp = config_path.with_suffix(".tmp")
+    tmp.write_text(final_text)
+    tmp.replace(config_path)
+    if verbose:
+        print(f"  written: {config_path}")
+    return True
+
+
 def _cmd_setup() -> None:
     import argparse
     import sys
@@ -876,7 +1009,7 @@ def _cmd_setup() -> None:
     )
     p.add_argument(
         "--client",
-        choices=["claude", "cursor", "all"],
+        choices=["claude", "cursor", "codex", "all"],
         default="all",
         help="Which AI client to configure (default: all)",
     )
@@ -886,19 +1019,28 @@ def _cmd_setup() -> None:
         help="Claude config directory (default: $CLAUDE_CONFIG_DIR or ~/.claude)",
     )
     p.add_argument("--cursor-dir", default="~/.cursor")
+    p.add_argument(
+        "--codex-dir",
+        default=None,
+        help="Codex CLI config directory (default: $CODEX_HOME or ~/.codex)",
+    )
     args = p.parse_args(sys.argv[2:])
 
-    clients = ["claude", "cursor"] if args.client == "all" else [args.client]
+    clients = ["claude", "cursor", "codex"] if args.client == "all" else [args.client]
     claude_dir = Path(args.claude_dir).expanduser() if args.claude_dir else _default_claude_dir()
+    codex_dir = Path(args.codex_dir).expanduser() if args.codex_dir else _default_codex_dir()
 
     for client in clients:
         print(f"\n[{client}]")
         if client == "claude":
             _setup_hooks_impl(claude_dir, verbose=True)
             print("  Restart Claude Code to activate hooks.")
-        else:
+        elif client == "cursor":
             _setup_cursor_impl(Path(args.cursor_dir).expanduser(), verbose=True)
             print("  Restart Cursor to activate.")
+        else:
+            _setup_codex_impl(codex_dir, verbose=True)
+            print("  Restart Codex to activate.")
 
 
 def main() -> None:
