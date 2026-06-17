@@ -247,6 +247,22 @@ Run `reporag setup --client cursor` to write this automatically, or add manually
 }
 ```
 
+### Codex CLI (`~/.codex/config.toml`)
+
+Run `reporag setup --client codex` to write this automatically (preserves the rest of your hand-edited `config.toml` — comments, other servers, settings — via a marker-delimited managed block), or add manually:
+
+```toml
+[mcp_servers.reporag]
+command = "uvx"
+args = ["--from", "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git", "reporag"]
+env = { REPORAG_DATA_DIR = "~/.local/share/reporag" }
+enabled = true
+startup_timeout_sec = 30
+tool_timeout_sec = 120
+```
+
+Honors `CODEX_HOME` (defaults to `~/.codex`). Restart Codex to activate.
+
 ### Any other MCP client
 
 ```json
@@ -327,13 +343,14 @@ Persistent knowledge store across sessions.
 ## Client Setup
 
 ```bash
-# Configure both Claude Code and Cursor at once:
+# Configure Claude Code, Cursor, and Codex CLI at once:
 uvx --from "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git" \
     reporag setup --client all
 
 # Or configure individually:
 reporag setup --client claude   # Claude Code only
 reporag setup --client cursor   # Cursor only
+reporag setup --client codex    # Codex CLI only
 ```
 
 Then restart the client.
@@ -375,11 +392,18 @@ Use the reporag MCP tools for all code questions:
 query_code before answering, index_codebase if not indexed, get_symbol for lookups.
 ```
 
+### Codex CLI
+
+Writes `~/.codex/config.toml` with the reporag MCP server registration plus `UserPromptSubmit` (`reporag-hint`), `PreToolUse` (`reporag-dupcheck`, matcher `apply_patch`), and `SessionStart` (`reporag-autoindex`) command hooks — using a marker-delimited managed block (`# >>> reporag managed (do not edit) >>>` … `# <<< reporag managed <<<`) so hand-edited comments, other `[mcp_servers.*]` tables, and top-level settings survive untouched. The assembled file is validated with `tomllib` before writing; an invalid or conflicting existing file is left untouched and reported, never corrupted.
+
+Codex hooks emit `{"hookSpecificOutput": {...}}` JSON (set via `REPORAG_HOOK_FORMAT=codex` in the hook command) since Codex doesn't read plain stdout as context the way Claude Code does. Re-running setup is idempotent — byte-identical output, no rewrite.
+
 ### Additional CLI
 
 ```bash
-reporag status --project /path/to/project    # check if a project is indexed
-reporag setup-hooks [--claude-dir ~/.claude] # reinstall Claude Code hooks only
+reporag status --project /path/to/project     # check if a project is indexed
+reporag setup-hooks [--claude-dir ~/.claude]   # reinstall Claude Code hooks only
+reporag setup --client codex [--codex-dir ~/.codex]  # reinstall Codex config only
 ```
 
 ## Configuration
