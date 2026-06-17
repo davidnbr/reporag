@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from reporag.server import _setup_codex_impl, _setup_cursor_impl, _setup_hooks_impl
+from reporag.setup import _setup_codex_impl, _setup_cursor_impl, _setup_hooks_impl
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -47,9 +47,9 @@ def _fake_hooks_dir_full(tmp_path: Path) -> Path:
 def test_hooks_impl_installs_to_claude_dir(tmp_path, monkeypatch):
     pkg = _fake_hooks_dir(tmp_path)
     claude_dir = tmp_path / "claude"
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
 
     _setup_hooks_impl(claude_dir, verbose=False)
 
@@ -72,9 +72,9 @@ def test_hooks_impl_installs_to_claude_dir(tmp_path, monkeypatch):
 def test_hooks_impl_idempotent(tmp_path, monkeypatch):
     pkg = _fake_hooks_dir(tmp_path)
     claude_dir = tmp_path / "claude"
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
 
     _setup_hooks_impl(claude_dir)
     mtime1 = (claude_dir / "settings.json").stat().st_mtime
@@ -91,9 +91,9 @@ def test_hooks_impl_skips_corrupt_json(tmp_path, monkeypatch):
     claude_dir.mkdir()
     (claude_dir / "settings.json").write_text("{invalid json{{")
 
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
 
     result = _setup_hooks_impl(claude_dir, verbose=False)
     assert result is False
@@ -107,9 +107,9 @@ def test_hooks_impl_preserves_existing_settings(tmp_path, monkeypatch):
     existing = {"theme": "dark", "keybindings": {"save": "ctrl+s"}, "hooks": {"OtherEvent": []}}
     (claude_dir / "settings.json").write_text(json.dumps(existing))
 
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
     _setup_hooks_impl(claude_dir)
 
     result = json.loads((claude_dir / "settings.json").read_text())
@@ -126,9 +126,9 @@ def test_hooks_impl_handles_empty_hooks_list_entry(tmp_path, monkeypatch):
     settings = {"hooks": {"UserPromptSubmit": [{"matcher": ".*", "hooks": []}]}}
     (claude_dir / "settings.json").write_text(json.dumps(settings))
 
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
 
     result = _setup_hooks_impl(claude_dir, verbose=False)
     assert isinstance(result, bool)
@@ -294,9 +294,9 @@ def test_codex_impl_fresh_create(tmp_path, monkeypatch):
 
     pkg = _fake_hooks_dir_full(tmp_path)
     codex_dir = tmp_path / "codex"
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
 
     result = _setup_codex_impl(codex_dir, verbose=False)
     assert result is True
@@ -313,9 +313,9 @@ def test_codex_impl_fresh_create(tmp_path, monkeypatch):
 def test_codex_impl_idempotent(tmp_path, monkeypatch):
     pkg = _fake_hooks_dir_full(tmp_path)
     codex_dir = tmp_path / "codex"
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
 
     _setup_codex_impl(codex_dir, verbose=False)
     text1 = (codex_dir / "config.toml").read_text()
@@ -339,9 +339,9 @@ def test_codex_impl_preserves_existing_content(tmp_path, monkeypatch):
     )
     (codex_dir / "config.toml").write_text(existing)
 
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
     _setup_codex_impl(codex_dir, verbose=False)
 
     text = (codex_dir / "config.toml").read_text()
@@ -354,9 +354,9 @@ def test_codex_impl_preserves_existing_content(tmp_path, monkeypatch):
 def test_codex_impl_marker_replace_only_touches_managed_region(tmp_path, monkeypatch):
     pkg = _fake_hooks_dir_full(tmp_path)
     codex_dir = tmp_path / "codex"
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
 
     _setup_codex_impl(codex_dir, verbose=False)
     config_path = codex_dir / "config.toml"
@@ -379,9 +379,9 @@ def test_codex_impl_invalid_existing_toml_left_untouched(tmp_path, monkeypatch):
     bad = "this is not [valid toml\n"
     (codex_dir / "config.toml").write_text(bad)
 
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
     result = _setup_codex_impl(codex_dir, verbose=False)
 
     assert result is False
@@ -396,9 +396,9 @@ def test_codex_impl_duplicate_table_outside_markers_safe_skip(tmp_path, monkeypa
     conflicting = '[mcp_servers.reporag]\ncommand = "something-else"\n'
     (codex_dir / "config.toml").write_text(conflicting)
 
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
     result = _setup_codex_impl(codex_dir, verbose=False)
 
     assert result is False
@@ -410,9 +410,9 @@ def test_codex_impl_all_hooks_shell_wrapped_with_format(tmp_path, monkeypatch):
     """F1+F3: every hook command is sh -c wrapped and sets REPORAG_HOOK_FORMAT=codex."""
     pkg = _fake_hooks_dir_full(tmp_path)
     codex_dir = tmp_path / "codex"
-    import reporag.server as srv
+    import reporag.setup as srv
 
-    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    monkeypatch.setattr(srv, "PACKAGE_DIR", pkg)
     _setup_codex_impl(codex_dir, verbose=False)
     text = (codex_dir / "config.toml").read_text()
 
@@ -424,7 +424,7 @@ def test_codex_impl_all_hooks_shell_wrapped_with_format(tmp_path, monkeypatch):
 
 
 def test_codex_impl_honors_codex_home_default(tmp_path, monkeypatch):
-    import reporag.server as srv
+    import reporag.setup as srv
 
     monkeypatch.setenv("CODEX_HOME", str(tmp_path / "custom_codex"))
     assert srv._default_codex_dir() == tmp_path / "custom_codex"
