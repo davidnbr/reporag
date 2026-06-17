@@ -331,12 +331,7 @@ def test_codex_impl_preserves_existing_content(tmp_path, monkeypatch):
     pkg = _fake_hooks_dir_full(tmp_path)
     codex_dir = tmp_path / "codex"
     codex_dir.mkdir()
-    existing = (
-        "# my hand-written config\n"
-        "model = \"o3\"\n\n"
-        "[mcp_servers.other]\n"
-        "command = \"npx\"\n"
-    )
+    existing = '# my hand-written config\nmodel = "o3"\n\n[mcp_servers.other]\ncommand = "npx"\n'
     (codex_dir / "config.toml").write_text(existing)
 
     import reporag.setup as srv
@@ -363,7 +358,7 @@ def test_codex_impl_marker_replace_only_touches_managed_region(tmp_path, monkeyp
     text = config_path.read_text()
 
     # user appends content after the managed block
-    text_with_addition = text + "\n[mcp_servers.user_added]\ncommand = \"foo\"\n"
+    text_with_addition = text + '\n[mcp_servers.user_added]\ncommand = "foo"\n'
     config_path.write_text(text_with_addition)
 
     _setup_codex_impl(codex_dir, verbose=False)

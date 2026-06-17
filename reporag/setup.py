@@ -192,9 +192,7 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
 
     def _mcp_tools(entry: dict) -> list[str]:
         return [
-            e.get("tool", "")
-            for e in (entry.get("hooks") or [])
-            if e.get("type") == "mcp_tool"
+            e.get("tool", "") for e in (entry.get("hooks") or []) if e.get("type") == "mcp_tool"
         ]
 
     def _drop(entries: list, predicate: Callable[[dict], bool], note: str) -> None:
@@ -235,15 +233,11 @@ def _setup_hooks_impl(claude_dir: Path, verbose: bool = False) -> bool:
     hint_cmd = "${CLAUDE_CONFIG_DIR:-$HOME/.claude}/hooks/reporag-hint.py"
     _drop(
         up_hooks,
-        lambda e: any(
-            c.endswith("/reporag-hint.py") and c != hint_cmd for c in _commands(e)
-        ),
+        lambda e: any(c.endswith("/reporag-hint.py") and c != hint_cmd for c in _commands(e)),
         "  removed stale reporag-hint.py command hook",
     )
     if not any(hint_cmd in _commands(e) for e in up_hooks):
-        up_hooks.append(
-            {"matcher": ".*", "hooks": [{"type": "command", "command": hint_cmd}]}
-        )
+        up_hooks.append({"matcher": ".*", "hooks": [{"type": "command", "command": hint_cmd}]})
         changed = True
         _say(verbose, f"  added command hook: {hint_cmd}")
 
@@ -319,8 +313,7 @@ def _setup_cursor_impl(cursor_dir: Path, verbose: bool = False) -> bool:
 
     _say(
         verbose,
-        "\nFor older Cursor versions, add to your project's .cursorrules:\n"
-        + _CURSOR_RULES_BODY,
+        "\nFor older Cursor versions, add to your project's .cursorrules:\n" + _CURSOR_RULES_BODY,
     )
     return changed
 
@@ -341,9 +334,7 @@ def _codex_hook_command(script: Path) -> str:
     reporag hooks emit Codex JSON, so every command sets the env. ``shlex.quote``
     guards paths containing spaces or quotes.
     """
-    inner = (
-        f"{HOOK_FORMAT_ENV}=codex exec /usr/bin/env python3 {shlex.quote(str(script))}"
-    )
+    inner = f"{HOOK_FORMAT_ENV}=codex exec /usr/bin/env python3 {shlex.quote(str(script))}"
     return f"sh -c {shlex.quote(inner)}"
 
 
@@ -383,9 +374,7 @@ def _codex_managed_block(codex_dir: Path) -> str:
         "tool_timeout_sec = 120",
         "",
         *_codex_hook_table("UserPromptSubmit", None, hooks_dir / "reporag-hint.py"),
-        *_codex_hook_table(
-            "PreToolUse", "apply_patch", hooks_dir / "reporag-dupcheck.py"
-        ),
+        *_codex_hook_table("PreToolUse", "apply_patch", hooks_dir / "reporag-dupcheck.py"),
         *_codex_hook_table("SessionStart", ".*", hooks_dir / "reporag-autoindex.py"),
     ]
     # The last hook table leaves a trailing "" — replace it with the end marker.
@@ -465,15 +454,11 @@ _CLIENTS: Final[dict[str, _Client]] = {
     "cursor": _Client(
         "cursor", _default_cursor_dir, _setup_cursor_impl, "Restart Cursor to activate."
     ),
-    "codex": _Client(
-        "codex", _default_codex_dir, _setup_codex_impl, "Restart Codex to activate."
-    ),
+    "codex": _Client("codex", _default_codex_dir, _setup_codex_impl, "Restart Codex to activate."),
 }
 
 
-def run_setup(
-    clients: list[str], overrides: dict[str, Path], verbose: bool = True
-) -> None:
+def run_setup(clients: list[str], overrides: dict[str, Path], verbose: bool = True) -> None:
     """Configure each named client, using `overrides[key]` as its dir when present."""
     for key in clients:
         client = _CLIENTS[key]
@@ -500,9 +485,7 @@ def cli() -> None:
         help="Override Claude config dir ($CLAUDE_CONFIG_DIR or ~/.claude)",
     )
     parser.add_argument("--cursor-dir", help="Override Cursor config dir (~/.cursor)")
-    parser.add_argument(
-        "--codex-dir", help="Override Codex config dir ($CODEX_HOME or ~/.codex)"
-    )
+    parser.add_argument("--codex-dir", help="Override Codex config dir ($CODEX_HOME or ~/.codex)")
     args = parser.parse_args(sys.argv[2:])
 
     selected = list(_CLIENTS) if args.client == "all" else [args.client]
@@ -526,8 +509,6 @@ def cli_hooks() -> None:
         help="Claude config directory (default: $CLAUDE_CONFIG_DIR or ~/.claude)",
     )
     args = parser.parse_args(sys.argv[2:])
-    claude_dir = (
-        Path(args.claude_dir).expanduser() if args.claude_dir else _default_claude_dir()
-    )
+    claude_dir = Path(args.claude_dir).expanduser() if args.claude_dir else _default_claude_dir()
     _setup_hooks_impl(claude_dir, verbose=True)
     print("\nDone. Restart Claude Code to activate hooks.")

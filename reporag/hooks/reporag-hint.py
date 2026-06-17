@@ -17,7 +17,9 @@ from pathlib import Path
 
 def _emit(text: str, event: str) -> None:
     if os.environ.get("REPORAG_HOOK_FORMAT") == "codex":
-        print(json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}}))
+        print(
+            json.dumps({"hookSpecificOutput": {"hookEventName": event, "additionalContext": text}})
+        )
     else:
         print(text)
 
