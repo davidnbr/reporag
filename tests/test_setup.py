@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from reporag.server import _setup_cursor_impl, _setup_hooks_impl
+from reporag.server import _setup_codex_impl, _setup_cursor_impl, _setup_hooks_impl
 
 # ── helpers ──────────────────────────────────────────────────────────────────
 
@@ -22,6 +22,19 @@ def _fake_hooks_dir(tmp_path: Path) -> Path:
     hooks = pkg / "hooks"
     hooks.mkdir()
     for name in ("reporag-hint.py", "reporag-autoindex.py"):
+        hook = hooks / name
+        hook.write_text("#!/usr/bin/env python3\nimport sys; sys.exit(0)\n")
+        hook.chmod(0o755)
+    return pkg
+
+
+def _fake_hooks_dir_full(tmp_path: Path) -> Path:
+    """Like _fake_hooks_dir but also includes reporag-dupcheck.py, for codex setup tests."""
+    pkg = tmp_path / "reporag"
+    pkg.mkdir()
+    hooks = pkg / "hooks"
+    hooks.mkdir()
+    for name in ("reporag-hint.py", "reporag-dupcheck.py", "reporag-autoindex.py"):
         hook = hooks / name
         hook.write_text("#!/usr/bin/env python3\nimport sys; sys.exit(0)\n")
         hook.chmod(0o755)
@@ -273,6 +286,178 @@ def test_hint_hook_fires_for_non_code_prompt(tmp_path):
     assert "query_code" in out
 
 
+# ── _setup_codex_impl ─────────────────────────────────────────────────────────
+
+
+def test_codex_impl_fresh_create(tmp_path, monkeypatch):
+    import tomllib
+
+    pkg = _fake_hooks_dir_full(tmp_path)
+    codex_dir = tmp_path / "codex"
+    import reporag.server as srv
+
+    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+
+    result = _setup_codex_impl(codex_dir, verbose=False)
+    assert result is True
+
+    config_path = codex_dir / "config.toml"
+    text = config_path.read_text()
+    assert srv._CODEX_BEGIN_MARKER in text
+    assert srv._CODEX_END_MARKER in text
+
+    parsed = tomllib.loads(text)
+    assert "reporag" in parsed["mcp_servers"]
+
+
+def test_codex_impl_idempotent(tmp_path, monkeypatch):
+    pkg = _fake_hooks_dir_full(tmp_path)
+    codex_dir = tmp_path / "codex"
+    import reporag.server as srv
+
+    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+
+    _setup_codex_impl(codex_dir, verbose=False)
+    text1 = (codex_dir / "config.toml").read_text()
+
+    result = _setup_codex_impl(codex_dir, verbose=False)
+    text2 = (codex_dir / "config.toml").read_text()
+
+    assert result is False
+    assert text1 == text2
+
+
+def test_codex_impl_preserves_existing_content(tmp_path, monkeypatch):
+    pkg = _fake_hooks_dir_full(tmp_path)
+    codex_dir = tmp_path / "codex"
+    codex_dir.mkdir()
+    existing = (
+        "# my hand-written config\n"
+        "model = \"o3\"\n\n"
+        "[mcp_servers.other]\n"
+        "command = \"npx\"\n"
+    )
+    (codex_dir / "config.toml").write_text(existing)
+
+    import reporag.server as srv
+
+    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    _setup_codex_impl(codex_dir, verbose=False)
+
+    text = (codex_dir / "config.toml").read_text()
+    assert "# my hand-written config" in text
+    assert 'model = "o3"' in text
+    assert "[mcp_servers.other]" in text
+    assert "[mcp_servers.reporag]" in text
+
+
+def test_codex_impl_marker_replace_only_touches_managed_region(tmp_path, monkeypatch):
+    pkg = _fake_hooks_dir_full(tmp_path)
+    codex_dir = tmp_path / "codex"
+    import reporag.server as srv
+
+    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+
+    _setup_codex_impl(codex_dir, verbose=False)
+    config_path = codex_dir / "config.toml"
+    text = config_path.read_text()
+
+    # user appends content after the managed block
+    text_with_addition = text + "\n[mcp_servers.user_added]\ncommand = \"foo\"\n"
+    config_path.write_text(text_with_addition)
+
+    _setup_codex_impl(codex_dir, verbose=False)
+    text2 = config_path.read_text()
+    assert "[mcp_servers.user_added]" in text2
+    assert 'command = "foo"' in text2
+
+
+def test_codex_impl_invalid_existing_toml_left_untouched(tmp_path, monkeypatch):
+    pkg = _fake_hooks_dir_full(tmp_path)
+    codex_dir = tmp_path / "codex"
+    codex_dir.mkdir()
+    bad = "this is not [valid toml\n"
+    (codex_dir / "config.toml").write_text(bad)
+
+    import reporag.server as srv
+
+    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    result = _setup_codex_impl(codex_dir, verbose=False)
+
+    assert result is False
+    assert (codex_dir / "config.toml").read_text() == bad
+    assert not (codex_dir / "config.tmp").exists()
+
+
+def test_codex_impl_duplicate_table_outside_markers_safe_skip(tmp_path, monkeypatch):
+    pkg = _fake_hooks_dir_full(tmp_path)
+    codex_dir = tmp_path / "codex"
+    codex_dir.mkdir()
+    conflicting = '[mcp_servers.reporag]\ncommand = "something-else"\n'
+    (codex_dir / "config.toml").write_text(conflicting)
+
+    import reporag.server as srv
+
+    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    result = _setup_codex_impl(codex_dir, verbose=False)
+
+    assert result is False
+    assert (codex_dir / "config.toml").read_text() == conflicting
+    assert not (codex_dir / "config.tmp").exists()
+
+
+def test_codex_impl_all_hooks_shell_wrapped_with_format(tmp_path, monkeypatch):
+    """F1+F3: every hook command is sh -c wrapped and sets REPORAG_HOOK_FORMAT=codex."""
+    pkg = _fake_hooks_dir_full(tmp_path)
+    codex_dir = tmp_path / "codex"
+    import reporag.server as srv
+
+    monkeypatch.setattr(srv, "__file__", str(pkg / "server.py"))
+    _setup_codex_impl(codex_dir, verbose=False)
+    text = (codex_dir / "config.toml").read_text()
+
+    for script in ("reporag-hint.py", "reporag-dupcheck.py", "reporag-autoindex.py"):
+        # find the command line referencing this script and assert wrapping + env
+        line = next(ln for ln in text.splitlines() if script in ln and "command" in ln)
+        assert "sh -c" in line
+        assert "REPORAG_HOOK_FORMAT=codex" in line
+
+
+def test_codex_impl_honors_codex_home_default(tmp_path, monkeypatch):
+    import reporag.server as srv
+
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "custom_codex"))
+    assert srv._default_codex_dir() == tmp_path / "custom_codex"
+
+
+# ── hook script _emit format ──────────────────────────────────────────────────
+
+
+def test_hint_hook_codex_format(tmp_path):
+    registry = {"/home/user/myproject": {"chunks": 285, "files": 39}}
+    (tmp_path / "projects.json").write_text(json.dumps(registry))
+    out = _run_hook(
+        "reporag-hint.py",
+        {"cwd": "/home/user/myproject", "prompt": "explain the function"},
+        {"REPORAG_DATA_DIR": str(tmp_path), "REPORAG_HOOK_FORMAT": "codex"},
+    )
+    parsed = json.loads(out)
+    assert parsed["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+    assert "query_code" in parsed["hookSpecificOutput"]["additionalContext"]
+
+
+def test_hint_hook_plain_format_unset(tmp_path):
+    registry = {"/home/user/myproject": {"chunks": 285, "files": 39}}
+    (tmp_path / "projects.json").write_text(json.dumps(registry))
+    out = _run_hook(
+        "reporag-hint.py",
+        {"cwd": "/home/user/myproject", "prompt": "explain the function"},
+        {"REPORAG_DATA_DIR": str(tmp_path)},
+    )
+    assert out.startswith("[reporag]")
+    assert "hookSpecificOutput" not in out
+
+
 def test_hint_hook_no_sibling_collision(tmp_path):
     """Regression: hint must not fire for /myproject-fork when /myproject is indexed."""
     registry = {"/home/user/myproject": {"chunks": 100, "files": 10}}
@@ -281,5 +466,68 @@ def test_hint_hook_no_sibling_collision(tmp_path):
         "reporag-hint.py",
         {"cwd": "/home/user/myproject-fork", "prompt": "explain the function and debug the error"},
         {"REPORAG_DATA_DIR": str(tmp_path)},
+    )
+    assert out == ""
+
+
+def test_autoindex_hook_codex_format(tmp_path):
+    """F1: autoindex must emit Codex JSON (SessionStart) for an unindexed project."""
+    (tmp_path / "projects.json").write_text(json.dumps({}))
+    out = _run_hook(
+        "reporag-autoindex.py",
+        {"cwd": str(tmp_path / "unindexed_proj")},
+        {"REPORAG_DATA_DIR": str(tmp_path), "REPORAG_HOOK_FORMAT": "codex"},
+    )
+    parsed = json.loads(out)
+    assert parsed["hookSpecificOutput"]["hookEventName"] == "SessionStart"
+    assert "index_codebase" in parsed["hookSpecificOutput"]["additionalContext"]
+
+
+def _seed_symbols_db(tmp_path: Path, rows: list[tuple[str, str, int]]) -> None:
+    import sqlite3
+
+    conn = sqlite3.connect(tmp_path / "dependency_graph.db")
+    conn.execute("CREATE TABLE symbols (name TEXT, file_path TEXT, start_line INTEGER)")
+    conn.executemany("INSERT INTO symbols VALUES (?, ?, ?)", rows)
+    conn.commit()
+    conn.close()
+
+
+def test_dupcheck_hook_codex_apply_patch(tmp_path):
+    """F2: dupcheck must parse Codex apply_patch payloads and warn on collisions."""
+    _seed_symbols_db(tmp_path, [("existing_func", "other/mod.py", 12)])
+    patch = (
+        "*** Begin Patch\n"
+        "*** Add File: newmod.py\n"
+        "+def existing_func():\n"
+        "+    return 1\n"
+        "*** End Patch\n"
+    )
+    out = _run_hook(
+        "reporag-dupcheck.py",
+        {"tool_name": "apply_patch", "tool_input": {"command": patch}},
+        {"REPORAG_DATA_DIR": str(tmp_path), "REPORAG_HOOK_FORMAT": "codex"},
+    )
+    parsed = json.loads(out)
+    assert parsed["hookSpecificOutput"]["hookEventName"] == "PreToolUse"
+    ctx = parsed["hookSpecificOutput"]["additionalContext"]
+    assert "existing_func" in ctx
+    assert "other/mod.py:12" in ctx
+
+
+def test_dupcheck_hook_apply_patch_no_collision_silent(tmp_path):
+    """apply_patch defining a name not in the index produces no output."""
+    _seed_symbols_db(tmp_path, [("unrelated", "other/mod.py", 12)])
+    patch = (
+        "*** Begin Patch\n"
+        "*** Add File: newmod.py\n"
+        "+def brand_new_func():\n"
+        "+    return 1\n"
+        "*** End Patch\n"
+    )
+    out = _run_hook(
+        "reporag-dupcheck.py",
+        {"tool_name": "apply_patch", "tool_input": {"command": patch}},
+        {"REPORAG_DATA_DIR": str(tmp_path), "REPORAG_HOOK_FORMAT": "codex"},
     )
     assert out == ""
