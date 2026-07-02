@@ -177,9 +177,7 @@ async def test_bridge_retries_only_the_connect(monkeypatch):
 
     import mcp.client.streamable_http as streamable_http_mod
 
-    monkeypatch.setattr(
-        streamable_http_mod, "streamable_http_client", flaky_streamable_http_client
-    )
+    monkeypatch.setattr(streamable_http_mod, "streamable_http_client", flaky_streamable_http_client)
 
     await server._serve_bridge()
 
@@ -215,9 +213,7 @@ async def test_bridge_mid_session_failure_does_not_retry(monkeypatch):
 
     import mcp.client.streamable_http as streamable_http_mod
 
-    monkeypatch.setattr(
-        streamable_http_mod, "streamable_http_client", streamable_http_client
-    )
+    monkeypatch.setattr(streamable_http_mod, "streamable_http_client", streamable_http_client)
 
     # anyio's task group wraps the pump failure in an ExceptionGroup rather than
     # letting it propagate bare.

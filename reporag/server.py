@@ -795,8 +795,7 @@ def _ensure_daemon(host: str, port: int, wait_s: float = 30.0) -> None:
                 return
             time.sleep(0.2)
         raise RuntimeError(
-            f"reporag daemon did not come up on {host}:{port} within {wait_s}s; "
-            f"see {log_path}"
+            f"reporag daemon did not come up on {host}:{port} within {wait_s}s; see {log_path}"
         )
 
 
@@ -843,9 +842,7 @@ async def _serve_bridge() -> None:
                 streamable_http_client(url)
             )
         except Exception as exc:
-            logger.warning(
-                "reporag bridge: daemon connect failed (%r) — retrying once", exc
-            )
+            logger.warning("reporag bridge: daemon connect failed (%r) — retrying once", exc)
             _ensure_daemon(host, port)
             daemon_read, daemon_write, _ = await stack.enter_async_context(
                 streamable_http_client(url)
