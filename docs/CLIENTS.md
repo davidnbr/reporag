@@ -17,9 +17,30 @@ reporag setup --client codex    # Codex CLI only
 
 Then restart the client.
 
+> Each client launches `reporag` as a thin bridge that connects to one shared,
+> auto-spawned daemon per machine (loopback `127.0.0.1:7800`) — so multiple editor
+> windows reuse a single embedding model instead of one per client. This is transparent;
+> the config below is unchanged. See [CONFIGURATION.md § Shared daemon](CONFIGURATION.md#shared-daemon).
+
 ## Manual config
 
-### Claude Code (`~/.claude/.mcp.json`)
+### Claude Code
+
+`reporag setup --client claude` installs only the proactive-use **hooks** (into
+`~/.claude/settings.json`) — it does **not** register the MCP server. Register it yourself
+with the `claude mcp add` CLI (recommended — it writes the correct file for you):
+
+```bash
+claude mcp add --scope user --env REPORAG_DATA_DIR=~/.local/share/reporag \
+  reporag -- uvx --from "reporag[ml-cpu] @ git+https://github.com/davidnbr/reporag.git" reporag
+```
+
+`--scope user` makes reporag available across all your projects (stored in `~/.claude.json`).
+Use `--scope project` to share it with a team via a committed `.mcp.json`, or omit `--scope`
+for the default local scope (current project only, also in `~/.claude.json`).
+
+To edit JSON directly instead, MCP servers live in **`~/.claude.json`** (user/local scope) or
+a project-root **`.mcp.json`** — there is no `~/.claude/.mcp.json`. The entry format:
 
 ```json
 {

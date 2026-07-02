@@ -44,7 +44,7 @@ Restart your client. That's it — the server launches automatically via `uvx`, 
 **Set up one tool at a time** instead of `--client all`:
 
 ```bash
-reporag setup --client claude   # Claude Code  (~/.claude/.mcp.json + hooks)
+reporag setup --client claude   # Claude Code  (installs hooks; register the server with `claude mcp add` — see docs/CLIENTS.md)
 reporag setup --client cursor   # Cursor       (~/.cursor/mcp.json + rules)
 reporag setup --client codex    # Codex CLI    (~/.codex/config.toml)
 ```
@@ -99,7 +99,10 @@ reporag setup --client codex    # Codex CLI    (~/.codex/config.toml)
 AI tool (agy / Claude Code / Cursor / Codex)
        │
        ▼ MCP stdio
-reporag MCP server
+reporag bridge          → thin stdio↔HTTP proxy, one per client (loads no ML)
+       │
+       ▼ streamable HTTP (127.0.0.1:7800, loopback only)
+reporag daemon          → ONE per machine; auto-spawned, deduplicated, idle-shutdown
        ├── tree-sitter   → AST chunks + semantic text (per-language)
        ├── SCIP CLIs     → compiler-grade dependency graph (+ heuristic fallback)
        ├── LanceDB       → dense vector search (nomic-embed-text-v1, 768-dim, local)
@@ -109,6 +112,13 @@ reporag MCP server
        ├── Cross-encoder → reranking (bge-reranker-base, local)
        └── SQLite FTS5   → persistent memory store
 ```
+
+Every client still launches `reporag` the same way (via `uvx`), but each launch is now
+a lightweight **bridge** that connects to a single shared **daemon**. The first bridge
+starts the daemon; the rest reuse it — so N editor windows share **one** embedding model
+and **serialized** indexing instead of N copies competing for CPU/GPU. The daemon binds
+loopback only, and shuts itself down after 15 min idle (configurable). Set
+`REPORAG_NO_DAEMON=1` to revert to the classic self-contained per-client server.
 
 **Supported languages:** Python, JavaScript, TypeScript, Go, Rust, Java, C, C++.
 

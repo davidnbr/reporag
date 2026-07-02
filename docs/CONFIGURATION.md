@@ -48,6 +48,30 @@ Config file: `~/.config/reporag/config.json` (optional — all fields have defau
 | `REPORAG_SPARSE_CANDIDATES`   | `sparse_candidates`   |
 | `REPORAG_SNIPPET_CHARS`       | `snippet_chars`       |
 
+## Shared daemon
+
+Each client launch of `reporag` is a thin **bridge** (stdio↔HTTP) that connects to a
+single machine-wide **daemon** over loopback HTTP. The first bridge auto-spawns the
+daemon; every other client reuses it — so all editor windows share **one** embedding
+model and **serialized** indexing (one `index_codebase` at a time) instead of one heavy
+process per client. Spawning is deduplicated via a `flock` + fixed-port bind, so
+simultaneous launches can't race into two daemons. The daemon runs `reporag serve` under
+the hood and is detached, so it outlives the bridge that started it.
+
+The daemon auto-shuts-down after `REPORAG_IDLE_TIMEOUT` seconds with no active MCP
+sessions, then re-spawns on the next request — no orphaned process between coding sessions.
+
+| Variable               | Default       | Meaning                                                              |
+| ---------------------- | ------------- | -------------------------------------------------------------------- |
+| `REPORAG_HTTP_HOST`    | `127.0.0.1`   | Daemon bind address. Loopback only — never expose on the network.    |
+| `REPORAG_HTTP_PORT`    | `7800`        | Daemon TCP port.                                                     |
+| `REPORAG_IDLE_TIMEOUT` | `900` (15 min)| Idle seconds before auto-shutdown. `0` (or negative) = never shut down. |
+| `REPORAG_NO_DAEMON`    | _(unset)_     | `1` = skip the daemon; run a classic self-contained per-client server. |
+
+`reporag serve [--host H] [--port P]` starts the daemon in the foreground (host/port fall
+back to the env vars above) — useful for debugging. Normal usage never needs it; the
+bridge spawns the daemon on demand.
+
 ## Install variants
 
 | Extra      | Torch    | First-run download | Use when                         |
