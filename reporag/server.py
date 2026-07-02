@@ -1,9 +1,14 @@
 """
 RAG MCP Server — entry point.
 
-Exposes 11 tools via MCP stdio transport:
+Exposes 11 tools over MCP:
   index_codebase, index_status, query_code, find_existing, get_symbol, remember,
   recall, summarize_project, get_architecture, project_status, ask_project
+
+Two transports:
+  * stdio (default) — one server process spawned per client.
+  * streamable HTTP (`reporag serve`) — one shared daemon many clients connect to,
+    so a single embedding model and index semaphore are reused across sessions.
 
 Compatible with: agy, Claude Code, Cursor, any MCP client.
 Zero API cost at query time. All computation local.
@@ -578,6 +583,32 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
 
 
+async def _startup() -> None:
+    """Initialize shared runtime state common to every transport.
+
+    The ``index_sem`` created here is process-global: a single HTTP daemon shared
+    by multiple clients therefore serialises *all* indexing across those clients,
+    so two sessions can never spin up concurrent embed runs that saturate CPU/GPU.
+    """
+    _runtime.initialize()
+    _runtime._loop = asyncio.get_running_loop()
+    _runtime.index_sem = asyncio.Semaphore(1)  # serialise concurrent index runs
+
+    from reporag import setup
+
+    setup._auto_setup_hooks()
+
+    if _runtime.config.auto_index_paths:
+        asyncio.create_task(_runtime._auto_index())
+
+
+def _shutdown() -> None:
+    """Tear down background resources. Safe to call once per process."""
+    if _runtime._watcher is not None:
+        _runtime._watcher.stop()
+        _runtime._watcher.join(timeout=2)
+
+
 async def _serve() -> None:
     import sys
     from io import TextIOWrapper
@@ -595,16 +626,7 @@ async def _serve() -> None:
         TextIOWrapper(os.fdopen(real_stdout_fd, "wb"), encoding="utf-8")
     )
 
-    _runtime.initialize()
-    _runtime._loop = asyncio.get_running_loop()
-    _runtime.index_sem = asyncio.Semaphore(1)  # serialise concurrent index runs
-
-    from reporag import setup
-
-    setup._auto_setup_hooks()
-
-    if _runtime.config.auto_index_paths:
-        asyncio.create_task(_runtime._auto_index())
+    await _startup()
 
     try:
         async with mcp.server.stdio.stdio_server(stdout=transport_stdout) as (
@@ -613,9 +635,157 @@ async def _serve() -> None:
         ):
             await server.run(read_stream, write_stream, server.create_initialization_options())
     finally:
-        if _runtime._watcher is not None:
-            _runtime._watcher.stop()
-            _runtime._watcher.join(timeout=2)
+        _shutdown()
+
+
+async def _serve_http(host: str, port: int) -> None:
+    """Run a long-lived streamable-HTTP daemon shared by every MCP client.
+
+    Unlike stdio (one process spawned per client), a single daemon holds one
+    embedding model in memory and one ``index_sem``, so concurrent sessions reuse
+    the same instance instead of each loading their own model and indexing at once.
+    The fd-1 isolation done in ``_serve`` is stdio-only and deliberately omitted:
+    HTTP carries JSON-RPC over the socket, so stdout is free for normal logging.
+    """
+    import contextlib
+    from collections.abc import AsyncGenerator
+
+    import uvicorn
+    from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
+    from starlette.applications import Starlette
+    from starlette.routing import Mount
+
+    await _startup()
+
+    manager = StreamableHTTPSessionManager(app=server, stateless=False)
+
+    async def handle_mcp(scope: Any, receive: Any, send: Any) -> None:  # noqa: ANN401
+        await manager.handle_request(scope, receive, send)
+
+    @contextlib.asynccontextmanager
+    async def lifespan(_app: Starlette) -> AsyncGenerator[None]:
+        async with manager.run():
+            try:
+                yield
+            finally:
+                _shutdown()
+
+    app = Starlette(routes=[Mount("/mcp", app=handle_mcp)], lifespan=lifespan)
+    logger.warning("reporag HTTP daemon listening on http://%s:%d/mcp", host, port)
+    config = uvicorn.Config(app, host=host, port=port, log_level="warning")
+    await uvicorn.Server(config).serve()
+
+
+def _http_addr() -> tuple[str, int]:
+    """Resolve the shared-daemon bind address from the environment.
+
+    Loopback by default so the daemon is reachable only from the machine running
+    the IDE terminals — never exposed on the network.
+    """
+    host = os.environ.get("REPORAG_HTTP_HOST", "127.0.0.1")
+    port = int(os.environ.get("REPORAG_HTTP_PORT", "7800"))
+    return host, port
+
+
+def _port_open(host: str, port: int, timeout: float = 0.5) -> bool:
+    """Return True if a TCP listener is already accepting on ``host:port``."""
+    import socket
+
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _ensure_daemon(host: str, port: int, wait_s: float = 30.0) -> None:
+    """Guarantee exactly one shared daemon is running on this machine.
+
+    Every client (Claude, Cursor, ...) spawns a thin bridge; the first one to run
+    starts the daemon, the rest reuse it. A ``flock`` on ``daemon.lock`` serialises
+    the check-and-spawn so simultaneous launches can't race into two daemons, and
+    the fixed port bind is the final backstop — a second ``serve`` would fail to
+    bind and exit. The daemon is detached (``start_new_session``) so it outlives
+    the bridge that spawned it and keeps serving the other clients.
+    """
+    import fcntl
+    import subprocess
+    import time
+
+    if _port_open(host, port):
+        return
+
+    data_dir = _runtime._data_dir()
+    data_dir.mkdir(parents=True, exist_ok=True)
+    lock_path = data_dir / "daemon.lock"
+    log_path = data_dir / "daemon.log"
+
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        # Double-checked: another bridge may have started the daemon while we
+        # waited for the lock.
+        if _port_open(host, port):
+            return
+
+        logger.warning("reporag: no shared daemon on %s:%d — starting one", host, port)
+        with open(log_path, "ab") as log:
+            subprocess.Popen(
+                ["reporag", "serve", "--host", host, "--port", str(port)],
+                stdin=subprocess.DEVNULL,
+                stdout=log,
+                stderr=log,
+                start_new_session=True,
+            )
+
+        deadline = time.monotonic() + wait_s
+        while time.monotonic() < deadline:
+            if _port_open(host, port):
+                return
+            time.sleep(0.2)
+        raise RuntimeError(
+            f"reporag daemon did not come up on {host}:{port} within {wait_s}s; "
+            f"see {log_path}"
+        )
+
+
+async def _serve_bridge() -> None:
+    """Thin stdio↔HTTP proxy that every IDE spawns in place of a full server.
+
+    The IDE still launches ``reporag`` per session exactly as before, but this
+    process is cheap: it loads no embedding model. It ensures the single shared
+    daemon is up, then pumps JSON-RPC ``SessionMessage`` frames verbatim between
+    the client's stdio and the daemon's HTTP transport. Because it forwards
+    without interpreting, the full tool set, notifications, and streaming all pass
+    through untouched — and all sessions share one model and one index semaphore.
+    """
+    import anyio
+    from mcp.client.streamable_http import streamable_http_client
+
+    host, port = _http_addr()
+    _ensure_daemon(host, port)
+    url = f"http://{host}:{port}/mcp"
+
+    async def _pump(source: Any, sink: Any) -> None:  # noqa: ANN401
+        async for message in source:
+            if isinstance(message, Exception):
+                logger.warning("reporag bridge: dropping transport error: %r", message)
+                continue
+            await sink.send(message)
+
+    async with mcp.server.stdio.stdio_server() as (client_read, client_write):
+        async with streamable_http_client(url) as (daemon_read, daemon_write, _):
+            async with anyio.create_task_group() as tg:
+
+                async def client_to_daemon() -> None:
+                    await _pump(client_read, daemon_write)
+                    tg.cancel_scope.cancel()
+
+                async def daemon_to_client() -> None:
+                    await _pump(daemon_read, client_write)
+                    tg.cancel_scope.cancel()
+
+                tg.start_soon(client_to_daemon)
+                tg.start_soon(daemon_to_client)
 
 
 def _cmd_status() -> None:
@@ -639,6 +809,32 @@ def _cmd_status() -> None:
     print(json.dumps(result, indent=2))
 
 
+def _cmd_serve() -> None:
+    """Run reporag as a shared streamable-HTTP daemon.
+
+    Both host and port fall back to the ``REPORAG_HTTP_HOST`` / ``REPORAG_HTTP_PORT``
+    env vars so a systemd unit can set them without CLI flags.
+    """
+    import argparse
+    import sys
+
+    p = argparse.ArgumentParser(prog="reporag serve")
+    p.add_argument(
+        "--host",
+        default=os.environ.get("REPORAG_HTTP_HOST", "127.0.0.1"),
+        help="bind address (default: 127.0.0.1; loopback keeps the daemon local)",
+    )
+    p.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("REPORAG_HTTP_PORT", "7800")),
+        help="bind port (default: 7800)",
+    )
+    args = p.parse_args(sys.argv[2:])
+
+    asyncio.run(_serve_http(args.host, args.port))
+
+
 def main() -> None:
     import sys
 
@@ -646,6 +842,15 @@ def main() -> None:
         cmd = sys.argv[1]
         if cmd == "status":
             _cmd_status()
+            return
+        if cmd == "serve":
+            _cmd_serve()
+            return
+        if cmd == "stdio":
+            # Legacy direct mode: this process is itself the full server, loading
+            # its own model. Use for debugging or single-client setups that don't
+            # want the shared daemon. REPORAG_NO_DAEMON=1 selects it by default.
+            asyncio.run(_serve())
             return
         if cmd in ("setup", "setup-hooks"):
             from reporag import setup
@@ -656,7 +861,12 @@ def main() -> None:
                 setup.cli()
             return
 
-    asyncio.run(_serve())
+    # Default: thin bridge that auto-spawns and shares one machine-wide daemon.
+    # Opt out (revert to a self-contained per-client server) with REPORAG_NO_DAEMON=1.
+    if os.environ.get("REPORAG_NO_DAEMON") == "1":
+        asyncio.run(_serve())
+    else:
+        asyncio.run(_serve_bridge())
 
 
 if __name__ == "__main__":

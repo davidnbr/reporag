@@ -36,6 +36,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Shared HTTP daemon (`reporag serve`) — one process serves many MCP clients,
+# so a single embedding model and index_sem are reused instead of one per client.
+# starlette ships transitively with mcp; uvicorn is the only genuine addition.
+http = [
+    "uvicorn>=0.30.0",
+    "starlette>=0.37.0",
+]
 # Heavy ML stack — sentence-transformers pulls torch (~2GB CUDA by default)
 ml = [
     "sentence-transformers>=3.0.0",
