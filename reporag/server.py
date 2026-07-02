@@ -648,6 +648,7 @@ async def _serve_http(host: str, port: int) -> None:
     HTTP carries JSON-RPC over the socket, so stdout is free for normal logging.
     """
     import contextlib
+    import time
     from collections.abc import AsyncGenerator
 
     import uvicorn
@@ -658,8 +659,14 @@ async def _serve_http(host: str, port: int) -> None:
     await _startup()
 
     manager = StreamableHTTPSessionManager(app=server, stateless=False)
+    last_activity = time.monotonic()
 
     async def handle_mcp(scope: Any, receive: Any, send: Any) -> None:  # noqa: ANN401
+        nonlocal last_activity
+        # Bump at request START, not completion: long tool calls (e.g.
+        # index_codebase) can run past the idle timeout, and bumping only on
+        # completion would let the idle watcher shut the daemon down mid-run.
+        last_activity = time.monotonic()
         await manager.handle_request(scope, receive, send)
 
     @contextlib.asynccontextmanager
@@ -673,7 +680,37 @@ async def _serve_http(host: str, port: int) -> None:
     app = Starlette(routes=[Mount("/mcp", app=handle_mcp)], lifespan=lifespan)
     logger.warning("reporag HTTP daemon listening on http://%s:%d/mcp", host, port)
     config = uvicorn.Config(app, host=host, port=port, log_level="warning")
-    await uvicorn.Server(config).serve()
+    uvicorn_server = uvicorn.Server(config)
+
+    idle_timeout = float(os.environ.get("REPORAG_IDLE_TIMEOUT", "900"))
+
+    async def _idle_watcher() -> None:
+        """Shut the daemon down once idle past REPORAG_IDLE_TIMEOUT with no live sessions.
+
+        ``REPORAG_IDLE_TIMEOUT=0`` disables idle shutdown (daemon runs forever).
+        ``manager._server_instances`` is a PRIVATE mcp attribute (mcp 1.27.1) with
+        no public alternative for live-session counting — re-verify on any mcp
+        upgrade (see tests/test_server_daemon.py smoke test).
+        """
+        if idle_timeout <= 0:
+            return
+        while not uvicorn_server.should_exit:
+            await asyncio.sleep(1.0)
+            idle_for = time.monotonic() - last_activity
+            if idle_for >= idle_timeout and len(manager._server_instances) == 0:
+                logger.warning(
+                    "reporag: idle for %.0fs with no live sessions — shutting down", idle_for
+                )
+                uvicorn_server.should_exit = True
+                return
+
+    watcher_task = asyncio.create_task(_idle_watcher())
+    try:
+        await uvicorn_server.serve()
+    finally:
+        watcher_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await watcher_task
 
 
 def _http_addr() -> tuple[str, int]:
@@ -710,6 +747,7 @@ def _ensure_daemon(host: str, port: int, wait_s: float = 30.0) -> None:
     """
     import fcntl
     import subprocess
+    import sys
     import time
 
     if _port_open(host, port):
@@ -729,8 +767,22 @@ def _ensure_daemon(host: str, port: int, wait_s: float = 30.0) -> None:
 
         logger.warning("reporag: no shared daemon on %s:%d — starting one", host, port)
         with open(log_path, "ab") as log:
+            # Invoke via the running interpreter rather than the "reporag" launcher
+            # script, so the daemon starts even when PATH doesn't include the venv's
+            # bin dir (e.g. IDEs that spawn the bridge with a bare interpreter path).
+            # No env= is passed: Popen inherits the parent's environment by default,
+            # which preserves LD_LIBRARY_PATH, REPORAG_DATA_DIR, etc.
             subprocess.Popen(
-                ["reporag", "serve", "--host", host, "--port", str(port)],
+                [
+                    sys.executable,
+                    "-c",
+                    "from reporag.server import main; main()",
+                    "serve",
+                    "--host",
+                    host,
+                    "--port",
+                    str(port),
+                ],
                 stdin=subprocess.DEVNULL,
                 stdout=log,
                 stderr=log,
@@ -758,6 +810,8 @@ async def _serve_bridge() -> None:
     without interpreting, the full tool set, notifications, and streaming all pass
     through untouched — and all sessions share one model and one index semaphore.
     """
+    import contextlib
+
     import anyio
     from mcp.client.streamable_http import streamable_http_client
 
@@ -772,8 +826,35 @@ async def _serve_bridge() -> None:
                 continue
             await sink.send(message)
 
+    async def _open_daemon_stream(stack: contextlib.AsyncExitStack) -> tuple[Any, Any]:
+        """Enter the daemon HTTP client context, retrying the connect once.
+
+        Only the connect itself is retried here — never the pump below. The daemon
+        may have just shut itself down (idle timeout) between `_ensure_daemon`'s port
+        check and this connect attempt, a false "already up" during the shutdown
+        grace window. Re-invoke `_ensure_daemon` (which will now see the port closed
+        and start a fresh daemon) and reconnect once before giving up. A failure once
+        the pump is running (mid-session) must NOT retry: retrying there would drop
+        an in-flight JSON-RPC message and open a fresh session, leaving the IDE's
+        pending request unanswered.
+        """
+        try:
+            daemon_read, daemon_write, _ = await stack.enter_async_context(
+                streamable_http_client(url)
+            )
+        except Exception as exc:
+            logger.warning(
+                "reporag bridge: daemon connect failed (%r) — retrying once", exc
+            )
+            _ensure_daemon(host, port)
+            daemon_read, daemon_write, _ = await stack.enter_async_context(
+                streamable_http_client(url)
+            )
+        return daemon_read, daemon_write
+
     async with mcp.server.stdio.stdio_server() as (client_read, client_write):
-        async with streamable_http_client(url) as (daemon_read, daemon_write, _):
+        async with contextlib.AsyncExitStack() as stack:
+            daemon_read, daemon_write = await _open_daemon_stream(stack)
             async with anyio.create_task_group() as tg:
 
                 async def client_to_daemon() -> None:
